@@ -87,7 +87,7 @@ Stock goes down automatically when an order is placed, and back up if you cancel
 
 ## Run it on your computer
 
-You need [Node.js 22 LTS or newer](https://nodejs.org) (version **22.12+**). Older versions fail with an `ERR_REQUIRE_ESM` / `magic-string` error. Check yours with `node -v`.
+You need [Node.js](https://nodejs.org) **20.9 or newer** (22 LTS recommended). Check yours with `node -v`.
 
 ```bash
 npm install

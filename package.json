@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "dev": "next dev",
@@ -40,5 +40,10 @@
     "tailwindcss": "4.3.4",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@tailwindcss/node": {
+      "magic-string": "0.30.21"
+    }
   }
 }
