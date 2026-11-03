@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #fbf6f1;
+  --color-shell: #f6eee8;
+  --color-ink: #1e1418;
+  --color-muted: #6f5f63;
+  --color-line: #eadfd8;
+  --color-berry: #8e2c48;
+  --color-berry-dark: #6c1f36;
+  --color-blush: #f4d9d6;
+  --color-gold: #c9a36a;
+  --color-sage: #a9bfa8;
+
+  --font-display: "Fraunces Variable", "Georgia", serif;
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 10s ease-in-out infinite;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+    50% { transform: translateY(-14px) rotate(var(--r, 0deg)); }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@layer base {
+  html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--color-blush); color: var(--color-berry-dark); }
+  input, select, textarea { font: inherit; }
+  summary::-webkit-details-marker { display: none; }
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@layer components {
+  .container-x { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+
+  .btn-primary { @apply btn bg-ink text-cream hover:bg-berry active:scale-[0.98]; }
+  .btn-berry { @apply btn bg-berry text-white hover:bg-berry-dark active:scale-[0.98]; }
+  .btn-outline { @apply btn border border-ink/15 bg-white/60 text-ink backdrop-blur hover:border-ink hover:bg-white; }
+  .btn-ghost { @apply btn px-3 py-2 text-ink hover:bg-ink/5; }
+
+  .chip {
+    @apply inline-flex cursor-pointer select-none items-center justify-center rounded-full border border-line bg-white px-4 py-2
+      text-sm font-medium text-ink transition hover:border-ink/40;
+  }
+  .chip[data-active="true"] { @apply border-ink bg-ink text-cream; }
+
+  .field { @apply block w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition
+      placeholder:text-muted/60 focus:border-berry focus:ring-4 focus:ring-berry/10; }
+  .label { @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted; }
+
+  .card { @apply rounded-3xl border border-line bg-white; }
+
+  .eyebrow { @apply text-xs font-bold uppercase tracking-[0.2em] text-berry; }
+  .display { @apply font-display font-medium tracking-tight; }
+
+  .grain {
+    background-image: radial-gradient(rgba(30, 20, 24, 0.06) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+}

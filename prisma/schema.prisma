@@ -1,0 +1,163 @@
+// Database schema for the store.
+// Local development uses SQLite. For production, switch provider to "postgresql"
+// and point DATABASE_URL at a Postgres database (Neon, Supabase, Railway…).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Single row (id = 1) holding everything the owner can change from the admin panel.
+model Store {
+  id                Int     @id @default(1)
+  name              String  @default("Nailora")
+  tagline           String  @default("Hand-painted press-on nails")
+  artistName        String  @default("our nail artist")
+  announcement      String  @default("Free shipping on orders above ₹999 · Handmade in India")
+  heroTitle         String  @default("Salon nails, *hand-painted* for you.")
+  heroSubtitle      String  @default("Reusable press-on nails designed and painted by a professional nail artist. Made in your size, ready in 10 minutes, no salon visit.")
+  aboutText         String  @default("")
+  whatsapp          String  @default("919999999999")
+  email             String  @default("hello@example.com")
+  instagram         String  @default("nailora")
+  shippingFee       Int     @default(79)
+  freeShippingAbove Int     @default(999)
+  codEnabled        Boolean @default(true)
+  codFee            Int     @default(49)
+  dispatchDays      String  @default("Ready-made: 1–2 days · Made-to-measure: 3–5 days")
+}
+
+model Collection {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String    @default("")
+  tint        String    @default("#F4D9D6") // background colour for collection tiles
+  sortOrder   Int       @default(0)
+  products    Product[]
+}
+
+model Product {
+  id               String      @id @default(cuid())
+  slug             String      @unique
+  name             String
+  description      String      @default("")
+  price            Int // rupees
+  compareAtPrice   Int?
+  collectionId     String?
+  collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  images           String      @default("[]") // JSON array of image URLs
+  palette          String      @default("[\"#E8B4B8\",\"#F6E3E1\"]") // JSON array of hex colours for generated art
+  pattern          String      @default("solid") // solid | french | ombre | chrome | glitter | dots | marble
+  shapes           String      @default("[\"Almond\",\"Coffin\",\"Square\"]") // JSON array
+  lengths          String      @default("[\"Short\",\"Medium\",\"Long\"]") // JSON array
+  madeToMeasure    Boolean     @default(true)
+  madeToMeasureFee Int         @default(200)
+  stock            Int         @default(20)
+  featured         Boolean     @default(false)
+  active           Boolean     @default(true)
+  isAddon          Boolean     @default(false) // small extras shown in cart (glue, tabs…)
+  badge            String? // e.g. "Bestseller", "New drop"
+  sortOrder        Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  reviews          Review[]
+  orderItems       OrderItem[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  city      String   @default("")
+  rating    Int      @default(5)
+  text      String
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  number            String      @unique
+  // PENDING -> CONFIRMED -> IN_PRODUCTION -> PACKED -> SHIPPED -> DELIVERED, or CANCELLED / RTO
+  status            String      @default("PENDING")
+  paymentMethod     String // COD | ONLINE
+  paymentStatus     String      @default("PENDING") // PENDING | PAID | FAILED | REFUNDED
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  name              String
+  phone             String
+  email             String      @default("")
+  address1          String
+  address2          String      @default("")
+  city              String
+  state             String
+  pincode           String
+  notes             String      @default("")
+  subtotal          Int
+  discount          Int         @default(0)
+  shipping          Int         @default(0)
+  codFee            Int         @default(0)
+  total             Int
+  couponCode        String?
+  courier           String      @default("")
+  trackingNumber    String      @default("")
+  trackingUrl       String      @default("")
+  adminNotes        String      @default("")
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  items             OrderItem[]
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name         String
+  unitPrice    Int
+  quantity     Int
+  shape        String   @default("")
+  length       String   @default("")
+  size         String   @default("") // XS | S | M | L | Custom | ""
+  measurements String   @default("") // e.g. "Thumb 16, Index 12, Middle 13, Ring 12, Pinky 10 (mm)"
+}
+
+model Coupon {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  type       String    @default("PERCENT") // PERCENT | FLAT
+  value      Int
+  minOrder   Int       @default(0)
+  maxUses    Int?
+  usedCount  Int       @default(0)
+  active     Boolean   @default(true)
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model CustomRequest {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String
+  email        String   @default("")
+  occasion     String
+  eventDate    String   @default("")
+  shape        String   @default("")
+  length       String   @default("")
+  colours      String   @default("")
+  description  String
+  budget       String   @default("")
+  measurements String   @default("")
+  images       String   @default("[]") // JSON array of uploaded reference photo URLs
+  status       String   @default("NEW") // NEW | QUOTED | ACCEPTED | IN_PROGRESS | DONE | DECLINED
+  quote        Int?
+  adminNotes   String   @default("")
+  createdAt    DateTime @default(now())
+}
