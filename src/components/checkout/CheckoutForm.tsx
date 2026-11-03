@@ -78,7 +78,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, shape: i.shape, length: i.length, size: i.size, measurements: i.measurements, sizes: i.sizes })),
+          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, shape: i.shape, length: i.length, size: i.size, measurements: i.measurements, sizes: i.sizes, scans: i.scans })),
           customer: c,
           coupon: coupon?.code ?? "",
           paymentMethod: method,

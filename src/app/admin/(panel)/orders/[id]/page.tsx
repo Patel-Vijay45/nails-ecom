@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { formatDateTime, inr, waLink } from "@/lib/format";
 import { getStore } from "@/lib/store";
 import { getSavedSizes } from "@/lib/nailProfile";
-import { KIT_SIZES, SEND_LATER } from "@/lib/sizes";
+import { KIT_SIZES, scanSchema, SEND_LATER, type Scan } from "@/lib/sizes";
 import { FINGERS } from "@/lib/constants";
 import { saveCustomerSizes, updateOrder } from "../../../actions";
 import { Badge, PageTitle, Saved } from "../../ui";
@@ -32,7 +32,7 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
     <>
       <Link href="/admin/orders" className="text-sm text-muted hover:text-ink">← All orders</Link>
       <PageTitle title={`Order ${o.number}`} sub={`Placed ${formatDateTime(o.createdAt)}`}>
-        <div className="flex gap-2"><Badge value={o.status} /><Badge value={o.paymentStatus} /></div>
+        <div className="flex gap-2"><Badge value={o.status} /><Badge value={o.paymentStatus} label={o.paymentStatus === "PENDING" ? (o.paymentMethod === "COD" ? "Pay on delivery" : "Unpaid") : undefined} /></div>
       </PageTitle>
       <Saved show={sp.saved === "1"} />
       {sp.sizes === "invalid" && <p className="mb-6 rounded-xl bg-blush px-4 py-3 text-sm font-semibold text-berry-dark">Choose a size (0–11) for every finger.</p>}
@@ -53,6 +53,11 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
                     <p className="font-semibold">{i.quantity} × {i.name}</p>
                     <p className="text-muted">{[i.shape, i.length, i.size === "Custom" ? "MADE TO MEASURE" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}</p>
                     {i.measurements && <p className="mt-1 rounded-lg bg-blush px-2 py-1 text-xs font-semibold text-berry-dark">{i.measurements}</p>}
+                    {readScans(i.scans).length > 0 && (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {readScans(i.scans).map((sc) => <ScanView key={sc.url} scan={sc} />)}
+                      </div>
+                    )}
                   </div>
                   <p className="font-semibold">{inr(i.unitPrice * i.quantity)}</p>
                 </li>
@@ -161,5 +166,36 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
         </div>
       </div>
     </>
+  );
+}
+
+function readScans(json: string): Scan[] {
+  try {
+    const v = JSON.parse(json || "[]");
+    return Array.isArray(v) ? v.flatMap((x) => (scanSchema.safeParse(x).success ? [x as Scan] : [])) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Customer's photo with the measuring lines they placed, so the artist can double-check. */
+function ScanView({ scan }: { scan: Scan }) {
+  const line = (a: [number, number], b: [number, number], color: string, key: string) => (
+    <line key={key} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+  );
+  return (
+    <figure className="rounded-xl bg-shell p-2">
+      <a href={scan.url} target="_blank" rel="noreferrer" className="relative block overflow-hidden rounded-lg">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={scan.url} alt={`${scan.hand} hand photo`} className="block w-full" />
+        <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+          {line(scan.card[0], scan.card[1], "#c9a36a", "card")}
+          {scan.nails.map(([a, b], f) => line(a, b, "#e0567a", String(f)))}
+        </svg>
+      </a>
+      <figcaption className="mt-1 text-[11px] text-muted">
+        <b className="text-ink">{scan.hand === "right" ? "Right" : "Left"} hand photo</b> · {scan.mm.map((m, f) => `${FINGERS[f][0]} ${m}mm`).join(" · ")}
+      </figcaption>
+    </figure>
   );
 }

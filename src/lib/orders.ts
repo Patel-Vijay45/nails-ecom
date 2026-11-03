@@ -8,7 +8,7 @@ import { computeShipping, evaluateCoupon } from "./pricing";
 import { createRazorpayOrder, razorpayEnabled } from "./razorpay";
 import { getStore } from "./store";
 import { getSavedSizes, saveSizes } from "./nailProfile";
-import { formatSizes, SEND_LATER, sizesSchema, type NailSizes } from "./sizes";
+import { formatSizes, scanSchema, SEND_LATER, sizesSchema, type NailSizes } from "./sizes";
 
 export const checkoutSchema = z.object({
   items: z
@@ -21,6 +21,7 @@ export const checkoutSchema = z.object({
         size: z.string().max(10).default(""),
         measurements: z.string().max(200).default(""),
         sizes: sizesSchema.optional(),
+        scans: z.array(scanSchema).max(2).optional(),
       }),
     )
     .min(1, "Your bag is empty")
@@ -100,6 +101,7 @@ export async function placeOrder(input: CheckoutInput) {
         length: hasOptions ? i.length : "",
         size: hasOptions ? i.size : "",
         measurements,
+        scans: custom && i.sizes && i.scans?.length ? JSON.stringify(i.scans) : "[]",
       },
     };
   });

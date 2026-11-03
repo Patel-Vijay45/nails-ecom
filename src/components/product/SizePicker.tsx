@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FINGERS } from "@/lib/constants";
-import { KIT_SIZES, type NailSizes } from "@/lib/sizes";
+import { KIT_SIZES, type NailSizes, type Scan } from "@/lib/sizes";
+import SizeScanner, { type ScanResult } from "./SizeScanner";
 
-export type SizeState = { right: (number | null)[]; left: (number | null)[]; same: boolean; later: boolean };
-export const EMPTY_SIZES: SizeState = { right: [null, null, null, null, null], left: [null, null, null, null, null], same: true, later: false };
+export type SizeState = { right: (number | null)[]; left: (number | null)[]; same: boolean; later: boolean; scans: Scan[] };
+export const EMPTY_SIZES: SizeState = { right: [null, null, null, null, null], left: [null, null, null, null, null], same: true, later: false, scans: [] };
 
 export const LOCAL_KEY = "nails_sizes_v1";
 
@@ -19,10 +20,11 @@ export function readSizes(s: SizeState): NailSizes | null {
 
 function fromSaved(sizes: NailSizes): SizeState {
   const same = sizes.right.every((v, i) => v === sizes.left[i]);
-  return { right: sizes.right, left: sizes.left, same, later: false };
+  return { right: sizes.right, left: sizes.left, same, later: false, scans: [] };
 }
 
-export default function SizePicker({ value, onChange }: { value: SizeState; onChange: (v: SizeState) => void }) {
+export default function SizePicker({ value, onChange, tipWidths }: { value: SizeState; onChange: (v: SizeState) => void; tipWidths: number[] }) {
+  const [scanning, setScanning] = useState(false);
   const [phone, setPhone] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,6 +52,19 @@ export default function SizePicker({ value, onChange }: { value: SizeState; onCh
       onChange(fromSaved(r.sizes));
       setMsg({ ok: true, text: "Your saved sizes are filled in ✓" });
     } else setMsg({ ok: false, text: r.error });
+  }
+
+  function applyScan(r: ScanResult) {
+    setScanning(false);
+    const scans = [...value.scans.filter((s) => s.hand !== r.hand), ...(r.scan ? [r.scan] : [])];
+    if (r.hand === "right") onChange({ ...value, right: r.sizes, left: value.same ? r.sizes : value.left, later: false, scans });
+    else onChange({ ...value, left: r.sizes, same: false, right: value.same && value.right.some((v) => v === null) ? r.sizes : value.right, later: false, scans });
+    setMsg({
+      ok: true,
+      text: r.hand === "right" && value.same
+        ? "Sizes filled in from your photo ✓ If your left hand is different, untick 'Both hands are the same' and measure it too."
+        : `Sizes for your ${r.hand} hand filled in from your photo ✓`,
+    });
   }
 
   const setHand = (hand: "right" | "left", i: number, v: string) => {
@@ -106,6 +121,20 @@ export default function SizePicker({ value, onChange }: { value: SizeState; onCh
         </div>
         {msg && <p className={`mt-2 text-xs ${msg.ok ? "text-[#2f6b44]" : "text-berry"}`}>{msg.text}</p>}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setScanning(true)}
+        disabled={value.later}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-berry/40 bg-blush/30 px-4 py-3 text-sm font-semibold text-berry transition hover:border-berry disabled:opacity-40"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+          <circle cx="12" cy="13" r="3.5" />
+        </svg>
+        No kit? Measure from a photo
+      </button>
+      {scanning && <SizeScanner tipWidths={tipWidths} onClose={() => setScanning(false)} onDone={applyScan} />}
 
       <div className="mt-4 space-y-4">
         {row("right", value.same ? "Both hands" : "Right hand")}

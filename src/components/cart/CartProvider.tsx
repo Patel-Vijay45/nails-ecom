@@ -1,6 +1,6 @@
 "use client";
 
-import type { NailSizes } from "@/lib/sizes";
+import type { NailSizes, Scan } from "@/lib/sizes";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type CartItem = {
@@ -15,6 +15,7 @@ export type CartItem = {
   size: string;
   measurements: string;
   sizes?: NailSizes; // made-to-measure kit sizes
+  scans?: Scan[]; // photo sizing measurements
   palette: string[];
   pattern: string;
   image?: string;

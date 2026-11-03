@@ -32,6 +32,7 @@ A complete, dynamic online store for selling handmade press-on nails, custom des
 | Payments | **Razorpay** (UPI, cards, netbanking, wallets) + **Cash on Delivery** | The ways Indian customers pay |
 | Admin login | Password + signed, http-only cookie | Simple and secure for a small team |
 | Product art | Custom SVG generator | Every design looks good even before you upload real photos |
+| Photo sizing | **MediaPipe Hand Landmarker** (runs in the customer's browser) | Finds fingers in the hand photo so measuring dots start in the right place |
 
 ## How a customer orders
 
@@ -57,6 +58,7 @@ flowchart LR
 3. **Fit.** Standard sizes **XS–L** (every box has 24 nails in 12 sizes), or **Made to measure** (extra fee set per product), where they pick their **sizing-kit numbers (0–11)** for each finger, for one or both hands. Unsure customers can buy the **₹99 Sizing Kit**.
    - **Sizes are saved by phone number.** On the same phone they fill in automatically; on a new device the customer taps **Load my sizes** and enters their number. If they choose "send sizes on WhatsApp" but have ordered before, their saved sizes are used automatically.
    - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
+   - **No kit? Measure from a photo.** The customer photographs one hand flat on a table next to any bank card (always 85.6 mm wide). Fingers are found automatically and measuring dots are placed on each nail. The customer drags the dots to the nail edges with a magnifier, and the tool converts each width to a kit size using your tip widths (**Admin → Settings → Sizing kit tip widths**). If the customer agrees, the photo with the measuring lines is attached to the order so the artist can double-check it.
 4. **Bag.** A slide-out bag shows a free-shipping progress bar and suggests add-ons (glue, tabs, prep kit).
 5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). The server recalculates every price from the database, so prices can't be tampered with.
 6. **Pay.**
@@ -77,7 +79,7 @@ flowchart LR
 | **Custom requests** | See bridal/custom enquiries with photos, set a quote, send it on WhatsApp |
 | **Coupons** | % or ₹ off, minimum order, usage limit, expiry date, pause/delete |
 | **Reviews** | Customer reviews wait here until you approve them |
-| **Settings** | Shop name, artist name, banner, home headline (wrap a word in `*stars*` to make it italic), about text, WhatsApp, Instagram, shipping fee, free-shipping threshold, COD on/off and fee, dispatch times |
+| **Settings** | Tip widths for each sizing-kit size (used by photo sizing), shop name, artist name, banner, home headline (wrap a word in `*stars*` to make it italic), about text, WhatsApp, Instagram, shipping fee, free-shipping threshold, COD on/off and fee, dispatch times |
 
 Stock goes down automatically when an order is placed, and back up if you cancel the order or mark it *Returned to us*.
 

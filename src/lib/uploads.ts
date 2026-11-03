@@ -14,7 +14,7 @@ const ALLOWED: Record<string, string> = {
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /** Saves uploaded images to disk and returns their public URLs (/uploads/...). */
-export async function saveImages(files: File[], folder: "products" | "requests") {
+export async function saveImages(files: File[], folder: "products" | "requests" | "sizing") {
   const urls: string[] = [];
   const dir = path.join(/*turbopackIgnore: true*/ uploadDir(), folder);
   await mkdir(dir, { recursive: true });

@@ -8,6 +8,7 @@ import { toView } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { getRatings } from "@/lib/ratings";
+import { parseTipWidths } from "@/lib/sizes";
 import { getStore } from "@/lib/store";
 
 type Params = Promise<{ slug: string }>;
@@ -51,7 +52,7 @@ export default async function ProductPage({ params }: { params: Params }) {
         <span className="text-ink">{p.name}</span>
       </nav>
 
-      <ProductConfigurator p={p} />
+      <ProductConfigurator p={p} tipWidths={parseTipWidths(store.tipWidths)} />
 
       <section className="mt-20 grid gap-6 md:grid-cols-3">
         {[

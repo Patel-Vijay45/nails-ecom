@@ -18,7 +18,7 @@ const SIZE_HELP: Record<string, string> = {
   L: "Thumb 18mm · Index 13mm",
 };
 
-export default function ProductConfigurator({ p }: { p: ProductView }) {
+export default function ProductConfigurator({ p, tipWidths }: { p: ProductView; tipWidths: number[] }) {
   const { add } = useCart();
   const router = useRouter();
   const hasOptions = p.shapes.length > 0;
@@ -59,6 +59,7 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
       size,
       measurements: !custom ? "" : chosen ? formatSizes(chosen) : SEND_LATER,
       sizes: chosen ?? undefined,
+      scans: chosen && sizes.scans.length ? sizes.scans : undefined,
       palette: p.palette,
       pattern: p.pattern,
       image: p.images[0],
@@ -146,7 +147,7 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
             </OptionGroup>
             {!custom && size && <p className="-mt-4 text-xs text-muted">Size {size}: {SIZE_HELP[size]}. Every set includes 24 nails across 12 sizes.</p>}
 
-            {custom && <SizePicker value={sizes} onChange={setSizes} />}
+            {custom && <SizePicker value={sizes} onChange={setSizes} tipWidths={tipWidths} />}
           </div>
         )}
 

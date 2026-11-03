@@ -1,3 +1,4 @@
+import { parseTipWidths } from "@/lib/sizes";
 import { getStore } from "@/lib/store";
 import { saveSettings } from "../../actions";
 import { PageTitle, Saved } from "../ui";
@@ -51,6 +52,21 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           <p className="text-xs text-muted sm:col-span-2">
             Online payments (UPI / cards) turn on automatically once Razorpay keys are added to the server&apos;s environment settings. See README.
           </p>
+        </section>
+        <section className="card p-6">
+          <h2 className="font-bold">Sizing kit tip widths (mm)</h2>
+          <p className="mt-1 text-sm text-muted">
+            Measure each tip you use, size 0 (widest) to 11, <b>straight across the widest part with a ruler</b> (not around the curve).
+            Photo sizing uses these to turn a customer&apos;s nail width into a size number. The values shown at first are typical placeholders.
+          </p>
+          <div className="mt-4 grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">
+            {parseTipWidths(s.tipWidths).map((w, i) => (
+              <label key={i} className="text-center">
+                <span className="label">Size {i}</span>
+                <input name={`tip${i}`} type="number" step="0.1" min="1" max="39" defaultValue={w} className="field px-1 text-center" />
+              </label>
+            ))}
+          </div>
         </section>
         <button className="btn-primary w-full py-4">Save settings</button>
       </form>

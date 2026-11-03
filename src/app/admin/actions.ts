@@ -7,7 +7,7 @@ import { ORDER_STATUSES, PATTERNS, REQUEST_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { parseList, slugify } from "@/lib/format";
 import { saveSizes } from "@/lib/nailProfile";
-import { formatSizes, isPhone, normalisePhone, SEND_LATER, sizesSchema } from "@/lib/sizes";
+import { DEFAULT_TIP_WIDTHS, formatSizes, isPhone, normalisePhone, SEND_LATER, sizesSchema } from "@/lib/sizes";
 import { saveImages } from "@/lib/uploads";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -212,6 +212,12 @@ export async function saveSettings(form: FormData) {
       codEnabled: bool(form, "codEnabled"),
       codFee: Math.max(0, int(form, "codFee")),
       dispatchDays: str(form, "dispatchDays"),
+      tipWidths: JSON.stringify(
+        Array.from({ length: 12 }, (_, i) => {
+          const v = parseFloat(str(form, `tip${i}`));
+          return Number.isFinite(v) && v > 0 && v < 40 ? Math.round(v * 10) / 10 : DEFAULT_TIP_WIDTHS[i];
+        }),
+      ),
     },
   });
   redirect("/admin/settings?saved=1");

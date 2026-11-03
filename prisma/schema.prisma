@@ -29,6 +29,8 @@ model Store {
   codEnabled        Boolean @default(true)
   codFee            Int     @default(49)
   dispatchDays      String  @default("Ready-made: 1–2 days · Made-to-measure: 3–5 days")
+  // Width in mm of each sizing-kit tip, size 0 (widest) to 11. Used by photo sizing.
+  tipWidths         String  @default("[18,17,16,15,14,13,12,11,10,9,8,7]")
 }
 
 model Collection {
@@ -126,7 +128,8 @@ model OrderItem {
   shape        String   @default("")
   length       String   @default("")
   size         String   @default("") // XS | S | M | L | Custom | ""
-  measurements String   @default("") // e.g. "Thumb 16, Index 12, Middle 13, Ring 12, Pinky 10 (mm)"
+  measurements String   @default("") // e.g. "Both hands 2-5-4-6-8 (kit sizes, thumb→pinky)"
+  scans        String   @default("[]") // JSON: photo sizing scans (photo URL, marked points, mm per finger)
 }
 
 model Coupon {

@@ -18,3 +18,34 @@ export function formatSizes(s: NailSizes) {
 
 export const normalisePhone = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
 export const isPhone = (p: string) => /^[6-9]\d{9}$/.test(p);
+
+/** Placeholder tip widths (mm) for sizes 0–11. Replace with your own in Admin → Settings. */
+export const DEFAULT_TIP_WIDTHS = [18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7];
+
+/** A standard bank / credit / debit card is 85.6 mm wide (ISO/IEC 7810 ID-1). */
+export const CARD_WIDTH_MM = 85.6;
+
+/** Picks the narrowest tip that still covers the nail (if between two sizes, go bigger). */
+export function mmToKit(tipWidths: number[], mm: number) {
+  for (let i = tipWidths.length - 1; i >= 0; i--) if (tipWidths[i] >= mm - 0.2) return i;
+  return 0;
+}
+
+export function parseTipWidths(json: string | null | undefined): number[] {
+  try {
+    const v = JSON.parse(json ?? "");
+    if (Array.isArray(v) && v.length === 12 && v.every((n) => typeof n === "number" && n > 0)) return v;
+  } catch {}
+  return DEFAULT_TIP_WIDTHS;
+}
+
+const point = z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]);
+/** One photo measurement: photo URL, the marked points (0–1 of image size) and mm per finger. */
+export const scanSchema = z.object({
+  url: z.string().regex(/^\/uploads\/sizing\/[\w.-]+$/),
+  hand: z.enum(["right", "left"]),
+  card: z.tuple([point, point]),
+  nails: z.array(z.tuple([point, point])).length(5),
+  mm: z.array(z.number().min(0).max(40)).length(5),
+});
+export type Scan = z.infer<typeof scanSchema>;
