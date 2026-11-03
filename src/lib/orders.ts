@@ -7,6 +7,8 @@ import { parseList } from "./format";
 import { computeShipping, evaluateCoupon } from "./pricing";
 import { createRazorpayOrder, razorpayEnabled } from "./razorpay";
 import { getStore } from "./store";
+import { getSavedSizes, saveSizes } from "./nailProfile";
+import { formatSizes, SEND_LATER, sizesSchema, type NailSizes } from "./sizes";
 
 export const checkoutSchema = z.object({
   items: z
@@ -18,6 +20,7 @@ export const checkoutSchema = z.object({
         length: z.string().max(30).default(""),
         size: z.string().max(10).default(""),
         measurements: z.string().max(200).default(""),
+        sizes: sizesSchema.optional(),
       }),
     )
     .min(1, "Your bag is empty")
@@ -58,6 +61,8 @@ export async function placeOrder(input: CheckoutInput) {
   const ids = [...new Set(input.items.map((i) => i.productId))];
   const products = await db.product.findMany({ where: { id: { in: ids }, active: true } });
   const byId = new Map(products.map((p) => [p.id, p]));
+  const savedSizes = await getSavedSizes(input.customer.phone);
+  let sizesToSave: NailSizes | null = null;
 
   const lines = input.items.map((i) => {
     const p = byId.get(i.productId);
@@ -71,7 +76,16 @@ export async function placeOrder(input: CheckoutInput) {
       if (lengths.length && !lengths.includes(i.length)) throw new CheckoutError(`Please choose a length for ${p.name}`);
       if (!custom && !(SIZES as readonly string[]).includes(i.size)) throw new CheckoutError(`Please choose a size for ${p.name}`);
       if (custom && !p.madeToMeasure) throw new CheckoutError(`${p.name} isn't available made to measure`);
-      if (custom && !i.measurements) throw new CheckoutError(`Please add your nail sizes for ${p.name}`);
+    }
+    // Made to measure: use the sizes they picked, else their saved sizes, else they'll send them on WhatsApp.
+    let measurements = "";
+    if (hasOptions && custom) {
+      if (i.sizes) {
+        measurements = formatSizes(i.sizes);
+        sizesToSave = i.sizes;
+      } else if (savedSizes) measurements = `${formatSizes(savedSizes)} (saved sizes)`;
+      else if (i.measurements === SEND_LATER) measurements = SEND_LATER;
+      else throw new CheckoutError(`Please choose your nail sizes for ${p.name}`);
     }
     const unitPrice = p.price + (custom ? p.madeToMeasureFee : 0);
     return {
@@ -85,7 +99,7 @@ export async function placeOrder(input: CheckoutInput) {
         shape: hasOptions ? i.shape : "",
         length: hasOptions ? i.length : "",
         size: hasOptions ? i.size : "",
-        measurements: custom ? i.measurements.slice(0, 200) : "",
+        measurements,
       },
     };
   });
@@ -133,6 +147,8 @@ export async function placeOrder(input: CheckoutInput) {
       },
     });
   });
+
+  if (sizesToSave) await saveSizes(input.customer.phone, sizesToSave);
 
   if (input.paymentMethod === "ONLINE") {
     const rz = await createRazorpayOrder(total, order.number);

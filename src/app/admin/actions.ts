@@ -6,6 +6,8 @@ import { checkPassword, createSession, destroySession, requireAdmin } from "@/li
 import { ORDER_STATUSES, PATTERNS, REQUEST_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { parseList, slugify } from "@/lib/format";
+import { saveSizes } from "@/lib/nailProfile";
+import { formatSizes, isPhone, normalisePhone, SEND_LATER, sizesSchema } from "@/lib/sizes";
 import { saveImages } from "@/lib/uploads";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -213,4 +215,20 @@ export async function saveSettings(form: FormData) {
     },
   });
   redirect("/admin/settings?saved=1");
+}
+
+// ---------- Customer nail sizes ----------
+export async function saveCustomerSizes(form: FormData) {
+  await requireAdmin();
+  const orderId = str(form, "orderId");
+  const phone = normalisePhone(str(form, "phone"));
+  const read = (h: string) => [0, 1, 2, 3, 4].map((i) => parseInt(str(form, `${h}${i}`), 10));
+  const right = read("r");
+  const left = bool(form, "same") ? right : read("l");
+  const parsed = sizesSchema.safeParse({ right, left });
+  if (!isPhone(phone) || !parsed.success) redirect(`/admin/orders/${orderId}?sizes=invalid`);
+  await saveSizes(phone, parsed.data);
+  // Fill in any made-to-measure items on this order that were waiting for sizes.
+  if (orderId) await db.orderItem.updateMany({ where: { orderId, measurements: SEND_LATER }, data: { measurements: formatSizes(parsed.data) } });
+  redirect(`/admin/orders/${orderId}?saved=1`);
 }

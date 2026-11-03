@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ProductView } from "@/lib/catalog";
-import { FINGERS, SIZES } from "@/lib/constants";
+import { SIZES } from "@/lib/constants";
 import { inr } from "@/lib/format";
+import { formatSizes, SEND_LATER } from "@/lib/sizes";
 import { useCart } from "../cart/CartProvider";
 import { CheckIcon, MinusIcon, PlusIcon, RulerIcon } from "../Icons";
 import NailArt from "../NailArt";
+import SizePicker, { EMPTY_SIZES, LOCAL_KEY, readSizes, type SizeState } from "./SizePicker";
 
 const SIZE_HELP: Record<string, string> = {
   XS: "Thumb 14mm · Index 10mm",
@@ -23,8 +25,7 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
   const [shape, setShape] = useState(p.shapes[0] ?? "");
   const [length, setLength] = useState(p.lengths[1] ?? p.lengths[0] ?? "");
   const [size, setSize] = useState<string>(hasOptions ? "M" : "");
-  const [mm, setMm] = useState<Record<string, string>>({});
-  const [later, setLater] = useState(false);
+  const [sizes, setSizes] = useState<SizeState>(EMPTY_SIZES);
   const [qty, setQty] = useState(1);
   const [view, setView] = useState<number>(-1); // -1 = live preview, else image index
   const [error, setError] = useState("");
@@ -35,17 +36,17 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
   const soldOut = p.stock <= 0 && !custom;
   const lowStock = !custom && p.stock > 0 && p.stock <= 5;
 
-  function buildMeasurements() {
-    if (!custom) return "";
-    if (later) return "Customer will send sizes on WhatsApp";
-    return FINGERS.map((f) => `${f} ${mm[f]}`).join(", ") + " (mm)";
-  }
-
   function submit(goCheckout: boolean) {
     setError("");
-    if (custom && !later && FINGERS.some((f) => !mm[f] || Number(mm[f]) < 5 || Number(mm[f]) > 25)) {
-      setError("Enter all 5 nail widths in mm (between 5 and 25), or tick 'I'll send my sizes later'.");
+    const chosen = custom && !sizes.later ? readSizes(sizes) : null;
+    if (custom && !sizes.later && !chosen) {
+      setError("Choose a size for every finger, or tick 'I'll send my sizes on WhatsApp'.");
       return;
+    }
+    if (chosen) {
+      try {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(chosen));
+      } catch {}
     }
     add({
       productId: p.id,
@@ -56,7 +57,8 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
       shape,
       length,
       size,
-      measurements: buildMeasurements(),
+      measurements: !custom ? "" : chosen ? formatSizes(chosen) : SEND_LATER,
+      sizes: chosen ?? undefined,
       palette: p.palette,
       pattern: p.pattern,
       image: p.images[0],
@@ -144,31 +146,7 @@ export default function ProductConfigurator({ p }: { p: ProductView }) {
             </OptionGroup>
             {!custom && size && <p className="-mt-4 text-xs text-muted">Size {size}: {SIZE_HELP[size]}. Every set includes 24 nails across 12 sizes.</p>}
 
-            {custom && (
-              <div className="rounded-3xl border border-line bg-white p-5">
-                <p className="text-sm font-semibold">Your nail widths (mm)</p>
-                <p className="mt-1 text-xs text-muted">Measure the widest part of each nail on your dominant hand. See the sizing guide for help.</p>
-                <div className="mt-4 grid grid-cols-5 gap-2">
-                  {FINGERS.map((f) => (
-                    <label key={f} className="text-center">
-                      <span className="text-[11px] font-semibold text-muted">{f}</span>
-                      <input
-                        inputMode="decimal"
-                        disabled={later}
-                        value={mm[f] ?? ""}
-                        onChange={(e) => setMm({ ...mm, [f]: e.target.value.replace(/[^\d.]/g, "") })}
-                        className="field mt-1 px-1 text-center disabled:opacity-40"
-                        placeholder="—"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <label className="mt-4 flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={later} onChange={(e) => setLater(e.target.checked)} className="h-4 w-4 accent-berry" />
-                  I&apos;ll send my sizes on WhatsApp after ordering
-                </label>
-              </div>
-            )}
+            {custom && <SizePicker value={sizes} onChange={setSizes} />}
           </div>
         )}
 

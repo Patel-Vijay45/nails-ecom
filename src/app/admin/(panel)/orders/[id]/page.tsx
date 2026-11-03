@@ -5,14 +5,20 @@ import { ORDER_STATUSES, STATUS_LABEL } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { formatDateTime, inr, waLink } from "@/lib/format";
 import { getStore } from "@/lib/store";
-import { updateOrder } from "../../../actions";
+import { getSavedSizes } from "@/lib/nailProfile";
+import { KIT_SIZES, SEND_LATER } from "@/lib/sizes";
+import { FINGERS } from "@/lib/constants";
+import { saveCustomerSizes, updateOrder } from "../../../actions";
 import { Badge, PageTitle, Saved } from "../../ui";
 
-export default async function OrderDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+export default async function OrderDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; sizes?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const [o, store] = await Promise.all([db.order.findUnique({ where: { id }, include: { items: { include: { product: true } } } }), getStore()]);
   if (!o) notFound();
+  const saved = await getSavedSizes(o.phone);
+  const waitingForSizes = o.items.some((i) => i.measurements === SEND_LATER);
+  const hasCustom = o.items.some((i) => i.size === "Custom");
 
   const first = o.name.split(" ")[0];
   const messages: [string, string][] = [
@@ -29,6 +35,12 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
         <div className="flex gap-2"><Badge value={o.status} /><Badge value={o.paymentStatus} /></div>
       </PageTitle>
       <Saved show={sp.saved === "1"} />
+      {sp.sizes === "invalid" && <p className="mb-6 rounded-xl bg-blush px-4 py-3 text-sm font-semibold text-berry-dark">Choose a size (0–11) for every finger.</p>}
+      {waitingForSizes && (
+        <p className="mb-6 rounded-xl bg-[#fdf0d5] px-4 py-3 text-sm font-semibold text-[#8a5a00]">
+          Waiting for this customer&apos;s nail sizes. When they send them on WhatsApp, enter them in &ldquo;Nail sizes&rdquo; on the right.
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -115,6 +127,36 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
               ))}
             </div>
           </section>
+          {(hasCustom || saved) && (
+            <form action={saveCustomerSizes} className="card p-6">
+              <input type="hidden" name="orderId" value={o.id} />
+              <input type="hidden" name="phone" value={o.phone} />
+              <h2 className="font-bold">Nail sizes</h2>
+              <p className="mt-1 text-xs text-muted">
+                {saved ? "Saved for this phone number. Future orders fill in automatically." : "Not saved yet. Enter the kit numbers the customer sends you."}
+              </p>
+              {(["r", "l"] as const).map((h) => (
+                <div key={h} className="mt-4">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">{h === "r" ? "Right hand" : "Left hand"}</p>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {FINGERS.map((f, i) => (
+                      <label key={f} className="text-center">
+                        <span className="text-[10px] font-semibold text-muted">{f}</span>
+                        <select name={`${h}${i}`} defaultValue={saved ? String((h === "r" ? saved.right : saved.left)[i]) : ""} className="field mt-0.5 appearance-none px-0 py-2 text-center text-sm">
+                          <option value="">–</option>
+                          {KIT_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <label className="mt-3 flex items-center gap-2 text-xs">
+                <input type="checkbox" name="same" defaultChecked={!saved} className="accent-berry" /> Left hand same as right
+              </label>
+              <button className="btn-primary mt-4 w-full py-2.5 text-xs">Save sizes</button>
+            </form>
+          )}
           <Link href={`/order/${o.id}`} target="_blank" className="btn-outline w-full text-xs">Customer&apos;s order page ↗</Link>
         </div>
       </div>

@@ -54,7 +54,9 @@ flowchart LR
 
 1. **Browse.** Shop by collection (Everyday, Glam, Bridal & Festive, Essentials), filter by shape, sort by price, or search.
 2. **Choose.** On the product page the customer picks **shape** (Almond, Coffin, Square, Oval, Stiletto), **length** and **size**. The nail preview changes live as they choose.
-3. **Fit.** Standard sizes **XS–L**, or **Made to measure** (extra fee set per product) where they type their 5 nail widths. Unsure customers can buy the **₹99 Sizing Kit**.
+3. **Fit.** Standard sizes **XS–L** (every box has 24 nails in 12 sizes), or **Made to measure** (extra fee set per product), where they pick their **sizing-kit numbers (0–11)** for each finger, for one or both hands. Unsure customers can buy the **₹99 Sizing Kit**.
+   - **Sizes are saved by phone number.** On the same phone they fill in automatically; on a new device the customer taps **Load my sizes** and enters their number. If they choose "send sizes on WhatsApp" but have ordered before, their saved sizes are used automatically.
+   - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
 4. **Bag.** A slide-out bag shows a free-shipping progress bar and suggests add-ons (glue, tabs, prep kit).
 5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). The server recalculates every price from the database, so prices can't be tampered with.
 6. **Pay.**

@@ -161,3 +161,13 @@ model CustomRequest {
   adminNotes   String   @default("")
   createdAt    DateTime @default(now())
 }
+
+// A customer's nail sizes (sizing-kit numbers 0–11, thumb → pinky), saved by phone
+// so repeat made-to-measure orders fill in automatically.
+model NailProfile {
+  phone     String   @id
+  right     String // JSON array of 5 numbers
+  left      String // JSON array of 5 numbers
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

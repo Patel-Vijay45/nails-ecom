@@ -61,6 +61,27 @@ export default function SizingGuide() {
         <Link href="/product/sizing-kit" className="font-semibold text-berry underline">sizing kit</Link>.
       </p>
 
+      <section className="mt-20 grid items-center gap-10 rounded-[40px] bg-[#e3ede6] p-8 md:grid-cols-2 md:p-12">
+        <div>
+          <p className="eyebrow">Made to measure</p>
+          <h2 className="display mt-3 text-4xl">Measure once, fit forever</h2>
+          <ol className="mt-6 space-y-3 text-muted">
+            <li><b className="text-ink">1.</b> Order the <Link href="/product/sizing-kit" className="font-semibold text-berry underline">sizing kit</Link>: clear tips numbered 0 (widest) to 11 (narrowest).</li>
+            <li><b className="text-ink">2.</b> Try tips on each finger. Pick the one that covers your nail edge to edge without touching skin.</li>
+            <li><b className="text-ink">3.</b> Choose <b className="text-ink">Made to measure</b> on any design and select your 5 numbers (or 10, if your hands differ).</li>
+            <li><b className="text-ink">4.</b> We save your sizes with your phone number. Next time, tap <b className="text-ink">Load my sizes</b> and you&apos;re done.</li>
+          </ol>
+        </div>
+        <div className="grid grid-cols-6 gap-2">
+          {Array.from({ length: 12 }, (_, n) => (
+            <div key={n} className="flex flex-col items-center gap-1">
+              <div className="rounded-t-full border border-white bg-white/80 shadow-sm" style={{ width: 34 - n * 1.8, height: 52 - n * 1.5 }} />
+              <span className="text-xs font-bold text-ink/60">{n}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section id="apply" className="mt-24 grid items-center gap-12 md:grid-cols-2">
         <div>
           <p className="eyebrow">How to apply</p>
