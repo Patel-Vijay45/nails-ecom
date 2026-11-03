@@ -52,7 +52,7 @@ export function parseTipWidths(json: string | null | undefined): number[] {
 const point = z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]);
 /** One photo measurement: photo URL, the marked points (0–1 of image size) and mm per finger. */
 export const scanSchema = z.object({
-  url: z.string().regex(/^\/uploads\/sizing\/[\w.-]+$/),
+  url: z.string().regex(/^(\/uploads\/sizing\/[\w.-]+|https:\/\/res\.cloudinary\.com\/[\w./-]+)$/),
   hand: z.enum(["right", "left"]),
   card: z.tuple([point, point]),
   nails: z.array(z.tuple([point, point])).length(5),

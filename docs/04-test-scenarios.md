@@ -104,4 +104,5 @@ npm run db:demo
 | E13 ✅ | Upload big phone photos | Product → Add photos → a 10 MB+ photo | Shrunk automatically, preview shown, saves fine |
 | E14 ✅ | Unsupported photo | Add a HEIC photo on Windows/Chrome | Friendly message, nothing breaks |
 | E15 ✅ | Main photo / remove | ★ Make main, Remove, Save | Order and removals saved; main photo first on shop |
+| E17 ✅ | Photo storage check | Settings → Photo storage check | Shows folder, writable ✓, latest photos load |
 | E16 ✅ | Big inspiration photo | Custom order form with a 10 MB photo | Request sends fine |

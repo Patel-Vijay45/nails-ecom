@@ -1,10 +1,15 @@
 import { parseTipWidths } from "@/lib/sizes";
 import { getStore } from "@/lib/store";
+import { db } from "@/lib/db";
+import { parseList } from "@/lib/format";
+import { storageStatus } from "@/lib/uploads";
 import { saveSettings } from "../../actions";
 import { PageTitle, Saved } from "../ui";
 
 export default async function Settings({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const s = await getStore();
+  const storage = await storageStatus();
+  const recent = (await db.product.findMany({ orderBy: { updatedAt: "desc" }, take: 20 })).flatMap((p) => parseList(p.images).map((src) => ({ src, name: p.name }))).slice(0, 4);
   const sp = await searchParams;
   const F = ({ name, label, type = "text", hint, wide }: { name: keyof typeof s; label: string; type?: string; hint?: string; wide?: boolean }) => (
     <label className={wide ? "sm:col-span-2" : ""}>
@@ -67,6 +72,44 @@ export default async function Settings({ searchParams }: { searchParams: Promise
               </label>
             ))}
           </div>
+        </section>
+        <section className="card p-6">
+          <h2 className="font-bold">Photo storage check</h2>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-[180px_1fr]">
+            <dt className="text-muted">Photos are saved in</dt>
+            <dd className="break-all font-mono text-xs">{storage.where}</dd>
+            {storage.mode === "disk" && (
+              <>
+                <dt className="text-muted">Folder writable</dt>
+                <dd>{storage.writable ? "✓ Yes" : "✗ No: the server can't save photos here"}</dd>
+                <dt className="text-muted">Product photos in folder</dt>
+                <dd>{storage.files ?? 0}</dd>
+              </>
+            )}
+            <dt className="text-muted">Server running from</dt>
+            <dd className="break-all font-mono text-xs">{storage.cwd}</dd>
+          </dl>
+          {recent.length > 0 ? (
+            <>
+              <p className="mt-4 text-sm text-muted">Latest product photos. If any of these show a broken image, the shop can&apos;t load them:</p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {recent.map((r) => (
+                  <a key={r.src} href={r.src} target="_blank" rel="noreferrer" className="w-24 text-center text-[10px] text-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.src} alt={r.name} className="h-24 w-24 rounded-xl bg-shell object-cover" />
+                    <span className="mt-1 block truncate">{r.name}</span>
+                  </a>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-muted">No product photos uploaded yet.</p>
+          )}
+          {storage.mode === "disk" && (
+            <p className="mt-4 text-xs text-muted">
+              On hosts with a temporary disk (Vercel, Netlify, or Render/Railway without a volume) photos disappear after a restart. There, set <code>CLOUDINARY_URL</code> (free account) so photos are stored safely. See README.
+            </p>
+          )}
         </section>
         <button className="btn-primary w-full py-4">Save settings</button>
       </form>

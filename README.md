@@ -19,6 +19,7 @@ A complete, dynamic online store for selling handmade press-on nails, custom des
 | 2 | [Customer and order flows](docs/02-flows.md) | Customer journey, custom orders, fulfilment, returns |
 | 3 | [Website build plan](docs/03-website-build-plan.md) | Pages, features and phases |
 | 4 | [Test scenarios](docs/04-test-scenarios.md) | Checklist to test every part of the shop and admin |
+| 6 | [Shipping & address plan](docs/06-shipping-and-address-plan.md) | How to charge shipping, courier costs, free pincode autofill vs paid location lookup |
 | 5 | [Nail types](docs/05-nail-types.md) | Research: 11 shapes, 5 lengths, nail systems, 19 finishes, colour families |
 
 ---
@@ -137,7 +138,9 @@ Set the same `.env` values on the server, keep `prisma/dev.db` and the `uploads/
 
 **Vercel (serverless).** The disk there isn't permanent, so:
 1. In `prisma/schema.prisma` change `provider = "sqlite"` to `provider = "postgresql"` and set `DATABASE_URL` to a Postgres database ([Neon](https://neon.tech) or [Supabase](https://supabase.com) have free plans).
-2. Upload product photos somewhere permanent (e.g. Cloudinary) and paste the image links in the product form instead of uploading files.
+2. Create a free [Cloudinary](https://cloudinary.com) account and set `CLOUDINARY_URL` (from the Cloudinary dashboard). Uploaded photos then go to Cloudinary instead of the server's temporary disk. Without this, photos disappear after a restart and show **404**.
+
+**Photos show 404?** Open **Admin → Settings → Photo storage check**. It shows where photos are saved, whether the folder is writable, and previews the latest photos. The server terminal also prints `[uploads] Photo not found: …` with the exact path it looked in.
 
 Before going live: change `ADMIN_PASSWORD`, set `SITE_URL`, update **Settings** (WhatsApp number, email, Instagram), replace the sample designs with real ones and photos, and read the policy text with your CA.
 
