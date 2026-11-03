@@ -6,6 +6,7 @@ An online store for handmade **press-on nails** and custom nail art, designed an
 
 | # | Document | What it covers |
 |---|----------|----------------|
+| 0 | [Market research](docs/00-market-research.md) | Market size, growth, competitors and prices, our position, realistic revenue |
 | 1 | [Business plan](docs/01-business-plan.md) | Products, pricing, costs, brand, legal setup, sales channels, marketing, 90-day roadmap |
 | 2 | [Customer and order flows](docs/02-flows.md) | How a customer finds us, picks a size, pays, and gets the order, plus how we make and ship it |
 | 3 | [Website build plan](docs/03-website-build-plan.md) | Pages, features, tech choices, and build phases for the store |
