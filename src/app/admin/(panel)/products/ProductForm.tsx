@@ -67,6 +67,10 @@ export default function ProductForm({ product, collections }: { product: Product
             <input name="stock" type="number" min={0} defaultValue={product?.stock ?? 20} className="field" />
           </label>
           <label>
+            <span className="label">Packed weight (grams)</span>
+            <input name="weightGrams" type="number" min={1} max={20000} defaultValue={product?.weightGrams ?? 150} className="field" />
+          </label>
+          <label>
             <span className="label">Sort order (lower shows first)</span>
             <input name="sortOrder" type="number" defaultValue={product?.sortOrder ?? 0} className="field" />
           </label>

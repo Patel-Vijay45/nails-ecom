@@ -153,6 +153,20 @@ const products: P[] = [
     shapes: POPULAR, lengths: STD, desc: "Hidden from the shop until launch. Only visible in the admin panel." },
 ];
 
+// Packed weight in grams (box + nails + prep kit), used for courier booking.
+const WEIGHT_BY_TYPE: Record<string, number> = { "Soft gel": 150, Acrylic: 170, ABS: 120, "Gel strips": 60, "Nail stickers": 30, Kit: 100, Accessory: 40 };
+
+// Example remote-area rules. Added switched OFF: review the amounts, then turn them on in Admin → Shipping.
+const pincodeRules = [
+  { prefix: "18", note: "Jammu & Kashmir delivery", extraShipping: 40, codAllowed: true },
+  { prefix: "19", note: "Jammu & Kashmir / Ladakh delivery", extraShipping: 40, codAllowed: true },
+  { prefix: "78", note: "Assam delivery", extraShipping: 30, codAllowed: true },
+  { prefix: "79", note: "North-East delivery", extraShipping: 50, codAllowed: false },
+  { prefix: "737", note: "Sikkim delivery", extraShipping: 40, codAllowed: true },
+  { prefix: "744", note: "Andaman & Nicobar delivery", extraShipping: 80, codAllowed: false },
+  { prefix: "68255", note: "Lakshadweep delivery", extraShipping: 80, codAllowed: false },
+];
+
 const reviews = [
   { slug: "milk-bath-french", name: "Ananya", city: "Pune", rating: 5, text: "Fit like they were painted on. My colleagues didn't believe they were press-ons!" },
   { slug: "royal-bride", name: "Riya", city: "Ahmedabad", rating: 5, text: "Wore these for my wedding. They lasted all 4 days of functions and looked stunning in photos." },
@@ -199,6 +213,7 @@ async function main() {
       madeToMeasure: p.mtm ?? true,
       madeToMeasureFee: p.fee ?? 200,
       stock: p.stock ?? 25,
+      weightGrams: WEIGHT_BY_TYPE[p.type ?? "Soft gel"] ?? 150,
       featured: p.featured ?? false,
       isAddon: p.addon ?? false,
       active: p.active ?? true,
@@ -225,7 +240,9 @@ async function main() {
   ];
   for (const c of coupons) await db.coupon.upsert({ where: { code: c.code }, update: c, create: c });
 
-  console.log(`Seeded ${collections.length} collections, ${products.length} products, ${reviews.length} reviews, ${coupons.length} coupons.`);
+  for (const r of pincodeRules) await db.pincodeRule.upsert({ where: { prefix: r.prefix }, update: {}, create: { ...r, active: false } });
+
+  console.log(`Seeded ${collections.length} collections, ${products.length} products, ${reviews.length} reviews, ${coupons.length} coupons, ${pincodeRules.length} pincode rules (off).`);
 }
 
 main().finally(() => db.$disconnect());

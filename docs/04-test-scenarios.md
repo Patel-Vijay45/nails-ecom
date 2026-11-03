@@ -106,3 +106,22 @@ npm run db:demo
 | E15 ✅ | Main photo / remove | ★ Make main, Remove, Save | Order and removals saved; main photo first on shop |
 | E17 ✅ | Photo storage check | Settings → Photo storage check | Shows folder, writable ✓, latest photos load |
 | E16 ✅ | Big inspiration photo | Custom order form with a 10 MB photo | Request sends fine |
+
+## F. Shipping and pincodes
+
+Run `npm run db:demo` first: it switches the example remote-area rules on.
+
+| # | Scenario | How to test | Expected |
+|---|----------|-------------|----------|
+| F1 ✅ | Pincode autofill | Checkout → pincode 380015 | "📍 Ahmedabad, Gujarat"; city + state filled; area suggestions in "Area, landmark" |
+| F2 ✅ | Changed pincode | Then type 400001 | City/state switch to Mumbai, Maharashtra |
+| F3 ✅ | Customer's own city kept | Type your own city, then a pincode | Your city is not overwritten |
+| F4 ✅ | Unknown pincode | 000000 | "We couldn't find this pincode" (order still possible) |
+| F5 ✅ | Lookup service down | (automatic test) | No warning; customer types city/state; rules still apply |
+| F6 ✅ | Remote area: extra shipping | 795001 (Manipur) | Note "North-East delivery: +₹50 shipping"; shipping ₹129 |
+| F7 ✅ | Remote area: no COD | 795001 | COD option replaced by "not available"; COD fee not added |
+| F8 ✅ | Server blocks COD | (automatic test) COD order to 795001 | Rejected: "Cash on delivery isn't available for pincode 795001" |
+| F9 | Extra shipping even when free | 744101 with an order above ₹999 | Shipping ₹80 (only the extra) |
+| F10 ✅ | Longest prefix wins | Admin → Shipping → add "3800"; test 380015 | Rule 3800 applies, not a shorter one |
+| F11 ✅ | Parcel weight | Place an order → admin order page | "Parcel: 150 g → billed as 0.5 kg" |
+| F12 ✅ | Real shipping cost | Enter real cost on orders → Admin → Shipping | Average cost per order and "covered" / "short by ₹…" |

@@ -9,6 +9,7 @@ const LINKS = [
   ["/admin/products", "Products", null],
   ["/admin/collections", "Collections", null],
   ["/admin/requests", "Custom requests", "requests"],
+  ["/admin/shipping", "Shipping", null],
   ["/admin/coupons", "Coupons", null],
   ["/admin/reviews", "Reviews", "reviews"],
   ["/admin/settings", "Settings", null],

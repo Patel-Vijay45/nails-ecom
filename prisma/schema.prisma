@@ -62,6 +62,7 @@ model Product {
   madeToMeasure    Boolean     @default(true)
   madeToMeasureFee Int         @default(200)
   stock            Int         @default(20)
+  weightGrams      Int         @default(150) // packed weight, for courier booking
   featured         Boolean     @default(false)
   active           Boolean     @default(true)
   isAddon          Boolean     @default(false) // small extras shown in cart (glue, tabs…)
@@ -109,6 +110,8 @@ model Order {
   codFee            Int         @default(0)
   total             Int
   couponCode        String?
+  weightGrams       Int         @default(0) // total packed weight of the parcel
+  shippingCost      Int? // what the courier actually charged (entered in admin)
   courier           String      @default("")
   trackingNumber    String      @default("")
   trackingUrl       String      @default("")
@@ -176,4 +179,16 @@ model NailProfile {
   left      String // JSON array of 5 numbers
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Delivery rules for groups of pincodes (matched by the start of the pincode, longest match wins),
+// e.g. "79" = North-East states: extra shipping and/or no cash on delivery.
+model PincodeRule {
+  id            String   @id @default(cuid())
+  prefix        String   @unique
+  codAllowed    Boolean  @default(true)
+  extraShipping Int      @default(0)
+  note          String   @default("")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
 }

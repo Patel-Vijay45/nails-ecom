@@ -57,10 +57,11 @@ Use an **aggregator** (Shiprocket, NimbusPost, iThink Logistics, Shipmozo and ot
 
 ## 6.4 Tech plan
 
-### Phase 1: now (free, about 1 day)
+### Phase 1: now (free, about 1 day): ✅ built
 - **Pincode autofill at checkout:** server route `/api/pincode/[pin]` calls the free pincode API with a 3-second timeout and caches results. Checkout fills city + state and suggests area names. If the lookup fails, the customer types as today.
 - **Pincode rules in admin:** a small table of pincode prefixes (e.g. `79` NE states, `18`/`19` J&K) with "COD off" and/or "extra shipping ₹X". The server applies them when pricing the order.
 - **Product weight** field (default 150 g), ready for Phase 2.
+- Also built: parcel weight on each order, and a "real shipping cost" field on orders with an average-cost vs charged summary on Admin → Shipping.
 
 ### Phase 2: when orders reach ~5+ per day (aggregator integration)
 - **At checkout:** serviceability check by pincode (can we deliver? is COD available?) and an estimated delivery date ("Get it by Thursday").

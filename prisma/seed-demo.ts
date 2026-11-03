@@ -77,6 +77,7 @@ async function main() {
       return { productId: p.id, name: p.name, unitPrice, quantity: i.qty ?? 1, shape: i.shape ?? "", length: i.length ?? "", size: i.size ?? "", color: i.color ?? "", measurements: i.measurements ?? "" };
     });
     const subtotal = lines.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
+    const weightGrams = d.items.reduce((n, i) => n + bySlug.get(i.slug)!.weightGrams * (i.qty ?? 1), 0);
     const discount = d.coupon?.discount ?? 0;
     const shipping = subtotal - discount >= 999 ? 0 : 79;
     const codFee = d.method === "COD" ? 49 : 0;
@@ -103,6 +104,7 @@ async function main() {
         codFee,
         total: subtotal - discount + shipping + codFee,
         couponCode: d.coupon?.code ?? null,
+        weightGrams,
         courier: d.courier ?? "",
         trackingNumber: d.awb ?? "",
         trackingUrl: d.awb ? `https://example.com/track/${d.awb}` : "",
@@ -111,6 +113,12 @@ async function main() {
         items: { create: lines },
       },
     });
+  }
+
+  // Turn the example remote-area rules on, and record real courier costs on shipped orders (for the Shipping page).
+  await db.pincodeRule.updateMany({ data: { active: true } });
+  for (const [n, cost] of [[1006, 62], [1007, 48], [1009, 124], [1012, 71]] as const) {
+    await db.order.update({ where: { number: `TEST${n}` }, data: { shippingCost: cost } });
   }
 
   // Saved nail sizes for one demo customer (loads with "Load my sizes" → 9000000004)

@@ -57,6 +57,7 @@ export async function updateOrder(form: FormData) {
       trackingNumber: str(form, "trackingNumber"),
       trackingUrl: str(form, "trackingUrl"),
       adminNotes: str(form, "adminNotes"),
+      shippingCost: str(form, "shippingCost") === "" ? null : Math.max(0, int(form, "shippingCost")),
     },
   });
   revalidatePath(`/admin/orders/${id}`);
@@ -114,6 +115,7 @@ export async function saveProduct(_: { error: string }, form: FormData): Promise
     madeToMeasure: bool(form, "madeToMeasure"),
     madeToMeasureFee: Math.max(0, int(form, "madeToMeasureFee")),
     stock: Math.max(0, int(form, "stock")),
+    weightGrams: Math.min(20000, Math.max(1, int(form, "weightGrams", 150))),
     featured: bool(form, "featured"),
     active: bool(form, "active"),
     isAddon: bool(form, "isAddon"),
@@ -256,4 +258,30 @@ export async function saveCustomerSizes(form: FormData) {
   // Fill in any made-to-measure items on this order that were waiting for sizes.
   if (orderId) await db.orderItem.updateMany({ where: { orderId, measurements: SEND_LATER }, data: { measurements: formatSizes(parsed.data) } });
   redirect(`/admin/orders/${orderId}?saved=1`);
+}
+
+// ---------- Shipping: pincode rules ----------
+export async function savePincodeRule(form: FormData) {
+  await requireAdmin();
+  const id = str(form, "id");
+  const prefix = str(form, "prefix").replace(/\D/g, "").slice(0, 6);
+  if (!prefix) return;
+  const data = {
+    prefix,
+    codAllowed: bool(form, "codAllowed"),
+    extraShipping: Math.max(0, int(form, "extraShipping")),
+    note: str(form, "note").slice(0, 80),
+    active: bool(form, "active"),
+  };
+  const clash = await db.pincodeRule.findUnique({ where: { prefix } });
+  if (clash && clash.id !== id) await db.pincodeRule.update({ where: { id: clash.id }, data });
+  else if (id) await db.pincodeRule.update({ where: { id }, data });
+  else await db.pincodeRule.create({ data });
+  revalidatePath("/admin/shipping");
+}
+
+export async function deletePincodeRule(form: FormData) {
+  await requireAdmin();
+  await db.pincodeRule.delete({ where: { id: str(form, "id") } });
+  revalidatePath("/admin/shipping");
 }

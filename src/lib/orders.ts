@@ -4,6 +4,7 @@ import { z } from "zod";
 import { SIZES } from "./constants";
 import { db } from "./db";
 import { parseList } from "./format";
+import { findPincodeRule } from "./pincode";
 import { computeShipping, evaluateCoupon } from "./pricing";
 import { createRazorpayOrder, razorpayEnabled } from "./razorpay";
 import { getStore } from "./store";
@@ -59,6 +60,10 @@ async function newOrderNumber(prefix: string) {
 export async function placeOrder(input: CheckoutInput) {
   const store = await getStore();
   if (input.paymentMethod === "COD" && !store.codEnabled) throw new CheckoutError("Cash on delivery isn't available right now");
+  const rule = await findPincodeRule(input.customer.pincode);
+  if (input.paymentMethod === "COD" && rule && !rule.codAllowed) {
+    throw new CheckoutError(`Cash on delivery isn't available for pincode ${input.customer.pincode}. Please pay online.`);
+  }
   if (input.paymentMethod === "ONLINE" && !razorpayEnabled()) throw new CheckoutError("Online payment isn't set up yet. Please choose cash on delivery.");
 
   const ids = [...new Set(input.items.map((i) => i.productId))];
@@ -129,7 +134,8 @@ export async function placeOrder(input: CheckoutInput) {
     discount = c.discount;
     couponCode = c.code;
   }
-  const shipping = computeShipping(store, subtotal - discount);
+  const shipping = computeShipping(store, subtotal - discount) + (rule?.extraShipping ?? 0);
+  const weightGrams = lines.reduce((n, l) => n + l.product.weightGrams * l.data.quantity, 0);
   const codFee = input.paymentMethod === "COD" ? store.codFee : 0;
   const total = Math.max(0, subtotal - discount + shipping + codFee);
   const number = await newOrderNumber(store.name.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "OR");
@@ -151,6 +157,7 @@ export async function placeOrder(input: CheckoutInput) {
         codFee,
         total,
         couponCode,
+        weightGrams,
         items: { create: lines.map((l) => l.data) },
       },
     });

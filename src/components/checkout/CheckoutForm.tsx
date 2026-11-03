@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { INDIAN_STATES } from "@/lib/constants";
 import { inr } from "@/lib/format";
 import { useCart } from "../cart/CartProvider";
@@ -51,9 +51,48 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal]);
 
+  // Pincode lookup: fills city + state, suggests areas, and applies remote-area rules.
+  type PinRule = { codAllowed: boolean; extraShipping: number; note: string } | null;
+  const [pin, setPin] = useState<{ status: "idle" | "loading" | "found" | "notfound" | "error"; city?: string; state?: string; areas: string[]; rule: PinRule }>({ status: "idle", areas: [], rule: null });
+  const lastAuto = useRef({ city: "", state: "" });
+  useEffect(() => {
+    if (!/^\d{6}$/.test(c.pincode)) {
+      setPin({ status: "idle", areas: [], rule: null });
+      return;
+    }
+    let cancelled = false;
+    setPin((p) => ({ ...p, status: "loading" }));
+    fetch(`/api/pincode/${c.pincode}`)
+      .then((r) => r.json())
+      .then((r) => {
+        if (cancelled) return;
+        if (!r.ok) return setPin({ status: "error", areas: [], rule: null });
+        // Lookup service down: stay quiet (customer types the address), but still apply delivery rules.
+        setPin({ status: r.found ? "found" : r.unavailable ? "error" : "notfound", city: r.city, state: r.state, areas: r.areas ?? [], rule: r.rule ?? null });
+        if (r.found) {
+          // Fill city/state unless the customer typed their own (i.e. replace only empty or previously auto-filled values).
+          const before = lastAuto.current;
+          lastAuto.current = { city: r.city, state: r.state };
+          setC((prev) => ({
+            ...prev,
+            city: !prev.city || prev.city === before.city ? r.city : prev.city,
+            state: r.state && (!prev.state || prev.state === before.state) ? r.state : prev.state,
+          }));
+        }
+      })
+      .catch(() => !cancelled && setPin({ status: "error", areas: [], rule: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [c.pincode]);
+  const codHere = settings.codEnabled && (pin.rule?.codAllowed ?? true);
+  useEffect(() => {
+    if (method === "COD" && !codHere && settings.onlineEnabled) setMethod("ONLINE");
+  }, [codHere, method, settings.onlineEnabled]);
+
   const discount = coupon?.discount ?? 0;
-  const shipping = subtotal - discount >= settings.freeShippingAbove ? 0 : settings.shippingFee;
-  const codFee = method === "COD" ? settings.codFee : 0;
+  const shipping = (subtotal - discount >= settings.freeShippingAbove ? 0 : settings.shippingFee) + (pin.rule?.extraShipping ?? 0);
+  const codFee = method === "COD" && codHere ? settings.codFee : 0;
   const total = Math.max(0, subtotal - discount + shipping + codFee);
 
   async function applyCoupon() {
@@ -160,10 +199,26 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
           <h2 className="text-lg font-bold">2. Delivery address</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {field("address1", "House / flat, street", { autoComplete: "address-line1", required: true, className: "sm:col-span-2" })}
-            {field("address2", "Area, landmark (optional)", { autoComplete: "address-line2", className: "sm:col-span-2" })}
-            {field("pincode", "Pincode", { autoComplete: "postal-code", inputMode: "numeric", required: true })}
+            {field("pincode", "Pincode", { autoComplete: "postal-code", inputMode: "numeric", required: true, placeholder: "6 digits" })}
+            <div className="flex items-end pb-3 text-sm">
+              {pin.status === "loading" && <span className="text-muted">Checking pincode…</span>}
+              {pin.status === "found" && <span className="font-semibold text-[#2f6b44]">📍 {[pin.city, pin.state].filter(Boolean).join(", ")}</span>}
+              {pin.status === "notfound" && <span className="text-berry">We couldn&apos;t find this pincode. Please check it.</span>}
+            </div>
+            {pin.rule && (pin.rule.extraShipping > 0 || !pin.rule.codAllowed) && (
+              <p className="rounded-xl bg-[#fdf0d5] px-4 py-3 text-sm text-[#8a5a00] sm:col-span-2">
+                {pin.rule.note ? `${pin.rule.note}: ` : "For this area: "}
+                {[pin.rule.extraShipping > 0 && `+${inr(pin.rule.extraShipping)} shipping`, !pin.rule.codAllowed && "cash on delivery isn't available"].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {field("address2", "Area, landmark (optional)", { autoComplete: "address-line2", className: "sm:col-span-2", list: "pin-areas", placeholder: pin.areas.length ? "Start typing or pick your area" : "" })}
+            <datalist id="pin-areas">
+              {pin.areas.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
             {field("city", "City", { autoComplete: "address-level2", required: true })}
-            <label className="sm:col-span-2">
+            <label>
               <span className="label">State</span>
               <select value={c.state} onChange={set("state")} className={`field ${errors.state ? "border-berry" : ""}`} required>
                 <option value="">Choose state</option>
@@ -185,7 +240,10 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
             {settings.onlineEnabled && (
               <PayOption checked={method === "ONLINE"} onSelect={() => setMethod("ONLINE")} title="UPI, cards, netbanking" sub="Pay securely with Razorpay. GPay, PhonePe, Paytm and all cards." />
             )}
-            {settings.codEnabled && (
+            {settings.codEnabled && !codHere && (
+              <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">Cash on delivery isn&apos;t available for this pincode.</p>
+            )}
+            {codHere && (
               <PayOption
                 checked={method === "COD"}
                 onSelect={() => setMethod("COD")}
@@ -193,7 +251,13 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
                 sub="We'll confirm your order on WhatsApp before we ship it."
               />
             )}
-            {!settings.onlineEnabled && !settings.codEnabled && <p className="text-sm text-berry">Ordering is paused right now. Please message us on WhatsApp.</p>}
+            {!settings.onlineEnabled && !codHere && (
+              <p className="text-sm text-berry">
+                {settings.codEnabled
+                  ? "Online payment isn't set up yet, and cash on delivery isn't available here. Please message us on WhatsApp to order."
+                  : "Ordering is paused right now. Please message us on WhatsApp."}
+              </p>
+            )}
           </div>
         </section>
       </div>
@@ -250,7 +314,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
           </dl>
 
           {error && <p className="mt-4 rounded-xl bg-blush px-4 py-3 text-sm text-berry-dark">{error}</p>}
-          <button className="btn-primary mt-5 w-full py-4 text-base" disabled={busy || (!settings.onlineEnabled && !settings.codEnabled)}>
+          <button className="btn-primary mt-5 w-full py-4 text-base" disabled={busy || (!settings.onlineEnabled && !codHere)}>
             {busy ? "Placing order…" : method === "ONLINE" ? `Pay ${inr(total)}` : `Place order · ${inr(total)}`}
           </button>
           <p className="mt-3 flex items-center justify-center gap-2 text-xs text-muted">

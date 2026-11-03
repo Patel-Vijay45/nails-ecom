@@ -95,6 +95,14 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
               <span className="label">Tracking / AWB number</span>
               <input name="trackingNumber" defaultValue={o.trackingNumber} className="field" />
             </label>
+            <label>
+              <span className="label">Real shipping cost (₹)</span>
+              <input name="shippingCost" type="number" min={0} defaultValue={o.shippingCost ?? ""} className="field" placeholder="What the courier charged" />
+            </label>
+            <div className="pb-3 text-sm text-muted">
+              Parcel: <b className="text-ink">{o.weightGrams ? `${o.weightGrams} g` : "weight not recorded"}</b>
+              {o.weightGrams > 0 && ` → billed as ${Math.max(0.5, Math.ceil(o.weightGrams / 500) * 0.5)} kg`}
+            </div>
             <label className="sm:col-span-2">
               <span className="label">Tracking link</span>
               <input name="trackingUrl" defaultValue={o.trackingUrl} className="field" placeholder="https://…" />
