@@ -51,7 +51,7 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
                 <li key={i.id} className="flex justify-between gap-4 py-4 text-sm">
                   <div>
                     <p className="font-semibold">{i.quantity} × {i.name}</p>
-                    <p className="text-muted">{[i.shape, i.length, i.size === "Custom" ? "MADE TO MEASURE" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}</p>
+                    <p className="text-muted">{[i.color, i.shape, i.length, i.size === "Custom" ? "MADE TO MEASURE" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}</p>
                     {i.measurements && <p className="mt-1 rounded-lg bg-blush px-2 py-1 text-xs font-semibold text-berry-dark">{i.measurements}</p>}
                     {readScans(i.scans).length > 0 && (
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">

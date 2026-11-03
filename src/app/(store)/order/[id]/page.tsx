@@ -94,7 +94,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 <span>
                   {i.quantity} × {i.name}
                   <span className="block text-xs text-muted">
-                    {[i.shape, i.length, i.size === "Custom" ? "Made to measure" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}
+                    {[i.color, i.shape, i.length, i.size === "Custom" ? "Made to measure" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}
                   </span>
                   {i.measurements && <span className="block text-xs text-muted">{i.measurements}</span>}
                 </span>

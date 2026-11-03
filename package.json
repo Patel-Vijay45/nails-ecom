@@ -14,7 +14,9 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "setup": "prisma db push && prisma db seed",
-    "postinstall": "node scripts/copy-mediapipe.mjs"
+    "postinstall": "node scripts/copy-mediapipe.mjs",
+    "db:demo": "tsx prisma/seed-demo.ts",
+    "db:reset": "prisma db push --force-reset && prisma db seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

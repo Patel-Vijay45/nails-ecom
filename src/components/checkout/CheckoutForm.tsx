@@ -78,7 +78,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, shape: i.shape, length: i.length, size: i.size, measurements: i.measurements, sizes: i.sizes, scans: i.scans })),
+          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, color: i.color ?? "", shape: i.shape, length: i.length, size: i.size, measurements: i.measurements, sizes: i.sizes, scans: i.scans })),
           customer: c,
           coupon: coupon?.code ?? "",
           paymentMethod: method,
@@ -210,7 +210,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
                 </div>
                 <div className="min-w-0 flex-1 text-sm">
                   <p className="font-semibold">{i.name}</p>
-                  <p className="text-xs text-muted">{[i.shape, i.length, i.size === "Custom" ? "Made to measure" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}</p>
+                  <p className="text-xs text-muted">{[i.color, i.shape, i.length, i.size === "Custom" ? "Made to measure" : i.size && `Size ${i.size}`].filter(Boolean).join(" · ")}</p>
                 </div>
                 <p className="text-sm font-semibold">{inr(i.price * i.quantity)}</p>
               </li>

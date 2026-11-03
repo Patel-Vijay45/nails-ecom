@@ -8,6 +8,7 @@ import { computeShipping, evaluateCoupon } from "./pricing";
 import { createRazorpayOrder, razorpayEnabled } from "./razorpay";
 import { getStore } from "./store";
 import { getSavedSizes, saveSizes } from "./nailProfile";
+import { parseColors } from "./colors";
 import { formatSizes, scanSchema, SEND_LATER, sizesSchema, type NailSizes } from "./sizes";
 
 export const checkoutSchema = z.object({
@@ -19,6 +20,7 @@ export const checkoutSchema = z.object({
         shape: z.string().max(30).default(""),
         length: z.string().max(30).default(""),
         size: z.string().max(10).default(""),
+        color: z.string().max(40).default(""),
         measurements: z.string().max(200).default(""),
         sizes: sizesSchema.optional(),
         scans: z.array(scanSchema).max(2).optional(),
@@ -88,7 +90,10 @@ export async function placeOrder(input: CheckoutInput) {
       else if (i.measurements === SEND_LATER) measurements = SEND_LATER;
       else throw new CheckoutError(`Please choose your nail sizes for ${p.name}`);
     }
-    const unitPrice = p.price + (custom ? p.madeToMeasureFee : 0);
+    const colors = parseColors(p.colors);
+    const colorOpt = colors.find((c) => c.name === i.color);
+    if (colors.length && !colorOpt) throw new CheckoutError(`Please choose a colour for ${p.name}`);
+    const unitPrice = p.price + (colorOpt?.extra ?? 0) + (custom ? p.madeToMeasureFee : 0);
     return {
       product: p,
       custom,
@@ -100,6 +105,7 @@ export async function placeOrder(input: CheckoutInput) {
         shape: hasOptions ? i.shape : "",
         length: hasOptions ? i.length : "",
         size: hasOptions ? i.size : "",
+        color: colorOpt?.name ?? "",
         measurements,
         scans: custom && i.sizes && i.scans?.length ? JSON.stringify(i.scans) : "[]",
       },

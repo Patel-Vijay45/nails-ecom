@@ -13,6 +13,7 @@ export type CartItem = {
   shape: string;
   length: string;
   size: string;
+  color?: string;
   measurements: string;
   sizes?: NailSizes; // made-to-measure kit sizes
   scans?: Scan[]; // photo sizing measurements
@@ -58,7 +59,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items, ready]);
 
   const add = useCallback((item: Omit<CartItem, "key">, opts?: { openDrawer?: boolean }) => {
-    const key = [item.productId, item.shape, item.length, item.size, item.measurements].join("|");
+    const key = [item.productId, item.color ?? "", item.shape, item.length, item.size, item.measurements].join("|");
     setItems((prev) => {
       const found = prev.find((i) => i.key === key);
       if (found) return prev.map((i) => (i.key === key ? { ...i, quantity: Math.min(10, i.quantity + item.quantity) } : i));

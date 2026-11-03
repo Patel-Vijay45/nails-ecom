@@ -97,7 +97,7 @@ export default function CartDrawer({ freeShippingAbove, addons }: { freeShipping
                       <p className="font-semibold">{inr(i.price * i.quantity)}</p>
                     </div>
                     <p className="mt-0.5 text-xs text-muted">
-                      {[i.shape, i.length, i.size && (i.size === "Custom" ? "Made to measure" : `Size ${i.size}`)].filter(Boolean).join(" · ")}
+                      {[i.color, i.shape, i.length, i.size && (i.size === "Custom" ? "Made to measure" : `Size ${i.size}`)].filter(Boolean).join(" · ")}
                     </p>
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex items-center rounded-full border border-line bg-white">

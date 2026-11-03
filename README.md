@@ -18,6 +18,8 @@ A complete, dynamic online store for selling handmade press-on nails, custom des
 | 1 | [Business plan](docs/01-business-plan.md) | Products, pricing, costs, brand, legal setup, marketing, 90-day roadmap |
 | 2 | [Customer and order flows](docs/02-flows.md) | Customer journey, custom orders, fulfilment, returns |
 | 3 | [Website build plan](docs/03-website-build-plan.md) | Pages, features and phases |
+| 4 | [Test scenarios](docs/04-test-scenarios.md) | Checklist to test every part of the shop and admin |
+| 5 | [Nail types](docs/05-nail-types.md) | Research: 11 shapes, 5 lengths, nail systems, 19 finishes, colour families |
 
 ---
 
@@ -53,8 +55,8 @@ flowchart LR
     K --> L[Track any time at /track<br/>with order no. + phone]
 ```
 
-1. **Browse.** Shop by collection (Everyday, Glam, Bridal & Festive, Essentials), filter by shape, sort by price, or search.
-2. **Choose.** On the product page the customer picks **shape** (Almond, Coffin, Square, Oval, Stiletto), **length** and **size**. The nail preview changes live as they choose.
+1. **Browse.** Shop by collection, filter by **type** (soft gel, acrylic, ABS, gel strips, stickers…), **shape** (11), **length** (5), **finish** (19) and **colour**, sort by price, or search. Every card has an **Add** button: extras go straight into the bag; sets open a quick sheet to pick colour, shape, length and size.
+2. **Choose.** On the product page the customer picks **colour** (some colours can cost extra), **shape** (Square, Squoval, Round, Oval, Almond, Coffin, Stiletto, Lipstick, Flare, Edge, Mountain Peak), **length** (Extra Short to Extra Long) and **size**. The nail preview changes live as they choose.
 3. **Fit.** Standard sizes **XS–L** (every box has 24 nails in 12 sizes), or **Made to measure** (extra fee set per product), where they pick their **sizing-kit numbers (0–11)** for each finger, for one or both hands. Unsure customers can buy the **₹99 Sizing Kit**.
    - **Sizes are saved by phone number.** On the same phone they fill in automatically; on a new device the customer taps **Load my sizes** and enters their number. If they choose "send sizes on WhatsApp" but have ordered before, their saved sizes are used automatically.
    - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
@@ -107,7 +109,11 @@ npm run setup
 npm run dev
 ```
 
-Open http://localhost:3000 for the shop and http://localhost:3000/admin for the admin panel. `npm run setup` creates the database and fills it with sample designs, reviews and two coupons (`WELCOME10`, `SIZEKIT99`).
+Open http://localhost:3000 for the shop and http://localhost:3000/admin for the admin panel. `npm run setup` creates the database and fills it with the full test catalogue: 34 designs covering every shape, length, finish and type, plus test coupons.
+
+**Test data** (see [Test scenarios](docs/04-test-scenarios.md)):
+- `npm run db:demo` adds test orders in every status, custom requests in every stage and reviews waiting for approval (all named "Test …").
+- `npm run db:reset` **wipes the database** and reloads the catalogue. Never run it on the live shop.
 
 ### Turn on UPI / card payments
 

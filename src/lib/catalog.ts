@@ -1,4 +1,5 @@
 import type { Collection, Product } from "@prisma/client";
+import { parseColors, type ColorOption } from "./colors";
 import { parseList } from "./format";
 
 export type ProductView = {
@@ -11,6 +12,8 @@ export type ProductView = {
   images: string[];
   palette: string[];
   pattern: string;
+  colors: ColorOption[];
+  nailType: string;
   shapes: string[];
   lengths: string[];
   madeToMeasure: boolean;
@@ -32,6 +35,8 @@ export function toView(p: Product & { collection?: Collection | null }): Product
     images: parseList(p.images),
     palette: parseList(p.palette),
     pattern: p.pattern,
+    colors: parseColors(p.colors),
+    nailType: p.nailType,
     shapes: parseList(p.shapes),
     lengths: parseList(p.lengths),
     madeToMeasure: p.madeToMeasure,

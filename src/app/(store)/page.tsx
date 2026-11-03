@@ -4,6 +4,7 @@ import NailArt from "@/components/NailArt";
 import ProductCard from "@/components/ProductCard";
 import RichTitle from "@/components/RichTitle";
 import { toView } from "@/lib/catalog";
+import { parseColors } from "@/lib/colors";
 import { db } from "@/lib/db";
 import { inr, parseList } from "@/lib/format";
 import { getRatings } from "@/lib/ratings";
@@ -27,7 +28,7 @@ export default async function Home() {
   };
   const heroSets = featured
     .map(toView)
-    .sort((a, b) => lum(a.palette[0]) - lum(b.palette[0]))
+    .sort((a, b) => lum((a.colors[0]?.palette ?? a.palette)[0]) - lum((b.colors[0]?.palette ?? b.palette)[0]))
     .slice(0, 3);
   const avg = agg._avg.rating ?? 5;
 
@@ -145,7 +146,7 @@ export default async function Home() {
                 </div>
                 {first && (
                   <NailArt
-                    palette={parseList(first.palette)}
+                    palette={parseColors(first.colors)[0]?.palette ?? parseList(first.palette)}
                     pattern={first.pattern}
                     shape={parseList(first.shapes)[0] ?? "Square"}
                     seed={first.slug}
@@ -384,7 +385,7 @@ function HeroCard({ p, className, rotate, big }: { p: ReturnType<typeof toView>;
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.images[0]} alt={p.name} className="aspect-square w-full rounded-[20px] object-cover" />
         ) : (
-          <NailArt palette={p.palette} pattern={p.pattern} shape={p.shapes[0] ?? "Almond"} seed={`${p.slug}-hero`} className="w-full p-2" />
+          <NailArt palette={p.colors[0]?.palette ?? p.palette} pattern={p.pattern} shape={p.shapes[0] ?? "Almond"} seed={`${p.slug}-hero`} className="w-full p-2" />
         )}
       </div>
 

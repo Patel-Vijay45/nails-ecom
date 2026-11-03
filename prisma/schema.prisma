@@ -54,7 +54,9 @@ model Product {
   collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   images           String      @default("[]") // JSON array of image URLs
   palette          String      @default("[\"#E8B4B8\",\"#F6E3E1\"]") // JSON array of hex colours for generated art
-  pattern          String      @default("solid") // solid | french | ombre | chrome | glitter | dots | marble
+  pattern          String      @default("solid") // finish / art style, see PATTERNS in src/lib/constants.ts
+  colors           String      @default("[]") // JSON colour options: [{ name, family, palette: [c1, c2], extra }]
+  nailType         String      @default("Soft gel") // Soft gel | Acrylic | ABS | Gel strips | Nail stickers | Kit | Accessory
   shapes           String      @default("[\"Almond\",\"Coffin\",\"Square\"]") // JSON array
   lengths          String      @default("[\"Short\",\"Medium\",\"Long\"]") // JSON array
   madeToMeasure    Boolean     @default(true)
@@ -128,6 +130,7 @@ model OrderItem {
   shape        String   @default("")
   length       String   @default("")
   size         String   @default("") // XS | S | M | L | Custom | ""
+  color        String   @default("") // chosen colour option name
   measurements String   @default("") // e.g. "Both hands 2-5-4-6-8 (kit sizes, thumb→pinky)"
   scans        String   @default("[]") // JSON: photo sizing scans (photo URL, marked points, mm per finger)
 }

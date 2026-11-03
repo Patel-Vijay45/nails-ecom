@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { checkPassword, createSession, destroySession, requireAdmin } from "@/lib/auth";
-import { ORDER_STATUSES, PATTERNS, REQUEST_STATUSES } from "@/lib/constants";
+import { colorOptionSchema } from "@/lib/colors";
+import { NAIL_TYPES, ORDER_STATUSES, PATTERNS, REQUEST_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { parseList, slugify } from "@/lib/format";
 import { saveSizes } from "@/lib/nailProfile";
@@ -79,6 +80,15 @@ export async function saveProduct(form: FormData) {
   const palette = [str(form, "color1") || "#E8B4B8", str(form, "color2") || "#FFFFFF"];
   const pattern = (PATTERNS as readonly string[]).includes(str(form, "pattern")) ? str(form, "pattern") : "solid";
   const compare = int(form, "compareAtPrice", 0);
+  let colors: unknown[] = [];
+  try {
+    colors = JSON.parse(str(form, "colors") || "[]");
+  } catch {}
+  const colorOptions = (Array.isArray(colors) ? colors : []).flatMap((c) => {
+    const r = colorOptionSchema.safeParse(c);
+    return r.success ? [r.data] : [];
+  }).filter((c, i, all) => all.findIndex((x) => x.name.toLowerCase() === c.name.toLowerCase()) === i);
+  const nailType = (NAIL_TYPES as readonly string[]).includes(str(form, "nailType")) ? str(form, "nailType") : "Soft gel";
 
   const data = {
     name,
@@ -90,6 +100,8 @@ export async function saveProduct(form: FormData) {
     images: JSON.stringify(images),
     palette: JSON.stringify(palette),
     pattern,
+    colors: JSON.stringify(colorOptions),
+    nailType,
     shapes: JSON.stringify(form.getAll("shapes").map(String)),
     lengths: JSON.stringify(form.getAll("lengths").map(String)),
     madeToMeasure: bool(form, "madeToMeasure"),
