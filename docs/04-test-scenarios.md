@@ -60,7 +60,10 @@ npm run db:demo
 | C10 | No options | Floral Nail Stickers | No colour/shape/size, just Add to bag |
 | C11 | Made to measure validation | Royal Bride → Made to measure → Add without sizes | Error asking for every finger |
 | C12 | Saved sizes by phone | Made to measure → enter 9000000004 → Load my sizes | Right 3-6-5-6-8, Left 3-6-5-7-8 |
-| C13 | Photo sizing | Made to measure → Measure from a photo | See photo sizing guide in README |
+| C13 ✅ | Photo sizing with ₹10 coin | Made to measure → Measure from a photo → ₹10 coin | Gold circle fits the coin; sizes fill in |
+| C13b ✅ | Photo sizing with ruler | Same, choose Ruler, put gold dots 5 cm apart | Sizes fill in |
+| C13c | Photo sizing with card | Same, choose Bank or Aadhaar card | Sizes fill in |
+| C15 ✅ | Real photo first | Product with uploaded photos | Main photo shows first; changing colour/shape/length switches to the live preview |
 | C14 | Write a review | Any product → Write a review | "Thank you" message; appears after admin approves |
 
 ## D. Bag and checkout
@@ -98,3 +101,7 @@ npm run db:demo
 | E10 | Approve reviews | Reviews | 2 "Test Reviewer" reviews waiting; Approve shows them on product page |
 | E11 | Coupons | Create, pause, delete | Works at checkout as expected |
 | E12 | Settings | Change shop name / shipping fee / tip widths | Shop updates instantly |
+| E13 ✅ | Upload big phone photos | Product → Add photos → a 10 MB+ photo | Shrunk automatically, preview shown, saves fine |
+| E14 ✅ | Unsupported photo | Add a HEIC photo on Windows/Chrome | Friendly message, nothing breaks |
+| E15 ✅ | Main photo / remove | ★ Make main, Remove, Save | Order and removals saved; main photo first on shop |
+| E16 ✅ | Big inspiration photo | Custom order form with a 10 MB photo | Request sends fine |

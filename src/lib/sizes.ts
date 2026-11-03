@@ -22,8 +22,18 @@ export const isPhone = (p: string) => /^[6-9]\d{9}$/.test(p);
 /** Placeholder tip widths (mm) for sizes 0–11. Replace with your own in Admin → Settings. */
 export const DEFAULT_TIP_WIDTHS = [18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7];
 
-/** A standard bank / credit / debit card is 85.6 mm wide (ISO/IEC 7810 ID-1). */
+/** A standard bank / credit / debit / Aadhaar PVC card is 85.6 mm wide (ISO/IEC 7810 ID-1). */
 export const CARD_WIDTH_MM = 85.6;
+
+/** The ₹10 coin is 27 mm across in every series in circulation (smaller coins changed size between series). */
+export const COIN_10_MM = 27;
+
+export const REFERENCES = {
+  coin: { label: "₹10 coin", hint: "27 mm, any year" },
+  ruler: { label: "Ruler / scale", hint: "most accurate" },
+  card: { label: "Bank or Aadhaar card", hint: "85.6 mm wide" },
+} as const;
+export type RefKind = keyof typeof REFERENCES;
 
 /** Picks the narrowest tip that still covers the nail (if between two sizes, go bigger). */
 export function mmToKit(tipWidths: number[], mm: number) {
@@ -47,5 +57,6 @@ export const scanSchema = z.object({
   card: z.tuple([point, point]),
   nails: z.array(z.tuple([point, point])).length(5),
   mm: z.array(z.number().min(0).max(40)).length(5),
+  ref: z.object({ kind: z.enum(["coin", "ruler", "card"]), mm: z.number().min(5).max(400) }).optional(),
 });
 export type Scan = z.infer<typeof scanSchema>;

@@ -64,18 +64,25 @@ export async function updateOrder(form: FormData) {
 }
 
 // ---------- Products ----------
-export async function saveProduct(form: FormData) {
+export async function saveProduct(_: { error: string }, form: FormData): Promise<{ error: string }> {
   await requireAdmin();
   const id = str(form, "id");
   const name = str(form, "name");
-  if (!name) throw new Error("Name is required");
+  if (!name) return { error: "Please enter a product name." };
   const slug = slugify(str(form, "slug") || name);
 
   const existing = id ? await db.product.findUnique({ where: { id } }) : null;
   const keep = form.getAll("keepImages").map(String);
-  const uploaded = await saveImages(form.getAll("newImages").filter((f): f is File => f instanceof File && f.size > 0), "products");
+  let uploaded: string[] = [];
+  try {
+    uploaded = await saveImages(form.getAll("newImages").filter((f): f is File => f instanceof File && f.size > 0), "products");
+  } catch (e) {
+    return { error: `Photos not saved: ${(e as Error).message}. Nothing else was changed, please try again.` };
+  }
   const urlImages = str(form, "imageUrls").split(/\s+/).filter((u) => /^https?:\/\//.test(u));
-  const images = [...(existing ? parseList(existing.images).filter((u) => keep.includes(u)) : []), ...uploaded, ...urlImages];
+  // Keep existing photos in the order chosen in the form (first = main photo).
+  const existingImages = existing ? parseList(existing.images) : [];
+  const images = [...keep.filter((u) => existingImages.includes(u)), ...uploaded, ...urlImages];
 
   const palette = [str(form, "color1") || "#E8B4B8", str(form, "color2") || "#FFFFFF"];
   const pattern = (PATTERNS as readonly string[]).includes(str(form, "pattern")) ? str(form, "pattern") : "solid";

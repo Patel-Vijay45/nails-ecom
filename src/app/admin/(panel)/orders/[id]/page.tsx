@@ -194,7 +194,9 @@ function ScanView({ scan }: { scan: Scan }) {
         </svg>
       </a>
       <figcaption className="mt-1 text-[11px] text-muted">
-        <b className="text-ink">{scan.hand === "right" ? "Right" : "Left"} hand photo</b> · {scan.mm.map((m, f) => `${FINGERS[f][0]} ${m}mm`).join(" · ")}
+        <b className="text-ink">{scan.hand === "right" ? "Right" : "Left"} hand photo</b>
+        {scan.ref && <> · measured with {scan.ref.kind === "coin" ? "₹10 coin" : scan.ref.kind === "card" ? "card" : `ruler (${scan.ref.mm / 10} cm)`}</>} ·{" "}
+        {scan.mm.map((m, f) => `${FINGERS[f][0]} ${m}mm`).join(" · ")}
       </figcaption>
     </figure>
   );

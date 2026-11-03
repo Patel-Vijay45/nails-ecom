@@ -1,7 +1,8 @@
 "use client";
 
 import type { Collection, Product } from "@prisma/client";
-import { useState } from "react";
+import { useActionState, useState } from "react";
+import ImageInput from "@/components/forms/ImageInput";
 import NailArt from "@/components/NailArt";
 import { parseColors, swatch, type ColorOption } from "@/lib/colors";
 import { ALL_LENGTHS, ALL_SHAPES, COLOR_FAMILIES, NAIL_TYPES, PATTERN_LABEL, PATTERNS } from "@/lib/constants";
@@ -18,11 +19,13 @@ export default function ProductForm({ product, collections }: { product: Product
   const shapes = product ? parseList(product.shapes) : ["Almond", "Coffin", "Square", "Oval"];
   const lengths = product ? parseList(product.lengths) : ["Short", "Medium", "Long"];
   const [previewShape, setPreviewShape] = useState(shapes[0] ?? "Almond");
-  const images = product ? parseList(product.images) : [];
+  const [kept, setKept] = useState<string[]>(product ? parseList(product.images) : []);
+  const [state, formAction, saving] = useActionState(saveProduct, { error: "" });
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <form action={saveProduct} className="space-y-6 lg:col-span-2">
+      <form action={formAction} className="space-y-6 lg:col-span-2">
+        {state.error && <p className="rounded-xl bg-blush px-4 py-3 text-sm font-semibold text-berry-dark">{state.error}</p>}
         {product && <input type="hidden" name="id" value={product.id} />}
         <section className="card grid gap-4 p-6 sm:grid-cols-2">
           <h2 className="font-bold sm:col-span-2">Basics</h2>
@@ -141,23 +144,32 @@ export default function ProductForm({ product, collections }: { product: Product
 
         <section className="card grid gap-4 p-6">
           <h2 className="font-bold">Photos</h2>
-          {images.length > 0 && (
+          {kept.length > 0 && (
             <div className="flex flex-wrap gap-3">
-              {images.map((src) => (
-                <label key={src} className="relative block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="h-24 w-24 rounded-xl object-cover" />
-                  <span className="mt-1 flex items-center gap-1 text-xs">
-                    <input type="checkbox" name="keepImages" value={src} defaultChecked className="accent-berry" /> Keep
-                  </span>
-                </label>
+              {kept.map((src, i) => (
+                <div key={src} className="w-28">
+                  <input type="hidden" name="keepImages" value={src} />
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt="" className={`h-28 w-28 rounded-xl object-cover ${i === 0 ? "ring-2 ring-berry ring-offset-2" : ""}`} />
+                    {i === 0 && <span className="absolute left-1.5 top-1.5 rounded-full bg-berry px-2 py-0.5 text-[10px] font-bold text-white">Main</span>}
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-[11px] font-semibold">
+                    {i > 0 ? (
+                      <button type="button" className="text-ink hover:text-berry" onClick={() => setKept([src, ...kept.filter((x) => x !== src)])}>★ Make main</button>
+                    ) : <span />}
+                    <button type="button" className="text-berry" onClick={() => setKept(kept.filter((x) => x !== src))}>Remove</button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
-          <label>
-            <span className="label">Upload photos (JPG, PNG, WEBP, max 8 MB each)</span>
-            <input type="file" name="newImages" multiple accept="image/jpeg,image/png,image/webp,image/avif" className="field" />
-          </label>
+          <ImageInput
+            name="newImages"
+            maxFiles={10}
+            label={kept.length ? "Add more photos" : "Add photos"}
+            hint="Any size from your phone or camera. We shrink them automatically. The first photo is the main one."
+          />
           <label>
             <span className="label">Or paste image links (one per line)</span>
             <textarea name="imageUrls" rows={2} className="field" placeholder="https://…" />
@@ -181,7 +193,8 @@ export default function ProductForm({ product, collections }: { product: Product
         <input type="hidden" name="color1" value={c1} />
         <input type="hidden" name="color2" value={c2} />
         <input type="hidden" name="pattern" value={pattern} />
-        <button className="btn-primary w-full py-4">{product ? "Save product" : "Create product"}</button>
+        <button className="btn-primary w-full py-4" disabled={saving}>{saving ? "Saving…" : product ? "Save product" : "Create product"}</button>
+        {state.error && <p className="rounded-xl bg-blush px-4 py-3 text-sm font-semibold text-berry-dark">{state.error}</p>}
       </form>
 
       <aside className="space-y-6 lg:sticky lg:top-10 lg:self-start">

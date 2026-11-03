@@ -60,7 +60,7 @@ flowchart LR
 3. **Fit.** Standard sizes **XS–L** (every box has 24 nails in 12 sizes), or **Made to measure** (extra fee set per product), where they pick their **sizing-kit numbers (0–11)** for each finger, for one or both hands. Unsure customers can buy the **₹99 Sizing Kit**.
    - **Sizes are saved by phone number.** On the same phone they fill in automatically; on a new device the customer taps **Load my sizes** and enters their number. If they choose "send sizes on WhatsApp" but have ordered before, their saved sizes are used automatically.
    - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
-   - **No kit? Measure from a photo.** The customer photographs one hand flat on a table next to any bank card (always 85.6 mm wide). Fingers are found automatically and measuring dots are placed on each nail. The customer drags the dots to the nail edges with a magnifier, and the tool converts each width to a kit size using your tip widths (**Admin → Settings → Sizing kit tip widths**). If the customer agrees, the photo with the measuring lines is attached to the order so the artist can double-check it.
+   - **No kit? Measure from a photo.** The customer photographs one hand flat on a table next to a **₹10 coin** (27 mm in every series), a **ruler / scale**, or a **bank / Aadhaar card** (85.6 mm). Fingers are found automatically and measuring dots are placed on each nail. The customer drags the dots to the nail edges with a magnifier (and lines up a gold circle with the coin), and the tool converts each width to a kit size using your tip widths (**Admin → Settings → Sizing kit tip widths**). If the customer agrees, the photo with the measuring lines is attached to the order so the artist can double-check it.
 4. **Bag.** A slide-out bag shows a free-shipping progress bar and suggests add-ons (glue, tabs, prep kit).
 5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). The server recalculates every price from the database, so prices can't be tampered with.
 6. **Pay.**
@@ -76,7 +76,7 @@ flowchart LR
 |---------|-----------------|
 | **Dashboard** | Sales today and this month, average order value, orders to confirm and ship, best sellers, low stock |
 | **Orders** | Filter by status, search by name/phone/order no., change status, add courier + tracking, mark paid/refunded, one-tap WhatsApp messages (confirm COD, ask for sizes, shipped, ask for review) |
-| **Products** | Add/edit designs: price, sale price, photos (upload or link), colours + pattern for the generated art, shapes, lengths, made-to-measure fee, stock, badge, featured on home page, hide/show |
+| **Products** | Add/edit designs: price, sale price, photos (any size from a phone; shrunk automatically, with previews, **Make main** and **Remove**), image links, colours + pattern for the generated art, shapes, lengths, made-to-measure fee, stock, badge, featured on home page, hide/show |
 | **Collections** | Create collections and set their colour and order |
 | **Custom requests** | See bridal/custom enquiries with photos, set a quote, send it on WhatsApp |
 | **Coupons** | % or ₹ off, minimum order, usage limit, expiry date, pause/delete |

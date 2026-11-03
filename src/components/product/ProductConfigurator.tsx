@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProductView } from "@/lib/catalog";
 import { PATTERN_LABEL, SIZES } from "@/lib/constants";
 import { swatch } from "@/lib/colors";
@@ -29,7 +29,16 @@ export default function ProductConfigurator({ p, tipWidths }: { p: ProductView; 
   const [size, setSize] = useState<string>(hasOptions ? "M" : "");
   const [sizes, setSizes] = useState<SizeState>(EMPTY_SIZES);
   const [qty, setQty] = useState(1);
-  const [view, setView] = useState<number>(-1); // -1 = live preview, else image index
+  // Show the first real photo if there is one; switch to the live preview when options change.
+  const [view, setView] = useState<number>(p.images.length ? 0 : -1); // -1 = live preview, else photo index
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setView(-1);
+  }, [shape, length, color]);
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
 
@@ -96,15 +105,16 @@ export default function ProductConfigurator({ p, tipWidths }: { p: ProductView; 
         </div>
         {p.images.length > 0 && (
           <div className="mt-3 flex gap-3 overflow-x-auto">
-            <button onClick={() => setView(-1)} className={`h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-shell ${view === -1 ? "border-ink" : "border-transparent"}`}>
-              <NailArt palette={palette} pattern={p.pattern} shape={shape || "Almond"} seed={p.slug} className="w-full" />
-            </button>
             {p.images.map((src, i) => (
               <button key={src} onClick={() => setView(i)} className={`h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 ${view === i ? "border-ink" : "border-transparent"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
+            <button onClick={() => setView(-1)} className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-shell ${view === -1 ? "border-ink" : "border-transparent"}`} aria-label="Live preview of your choices">
+              <NailArt palette={palette} pattern={p.pattern} shape={shape || "Almond"} length={length || "Medium"} seed={p.slug} className="w-full" />
+              <span className="absolute inset-x-0 bottom-0 bg-white/85 py-0.5 text-center text-[9px] font-bold uppercase tracking-wider">Preview</span>
+            </button>
           </div>
         )}
       </div>

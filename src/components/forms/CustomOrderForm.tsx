@@ -1,14 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { submitCustomRequest, type FormState } from "@/app/(store)/actions";
 import { ALL_LENGTHS, ALL_SHAPES } from "@/lib/constants";
 import { waLink } from "@/lib/format";
-import { CheckIcon, UploadIcon, WhatsAppIcon } from "../Icons";
+import { CheckIcon, WhatsAppIcon } from "../Icons";
+import ImageInput from "./ImageInput";
 
 export default function CustomOrderForm({ whatsapp }: { whatsapp: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitCustomRequest, { ok: false, message: "" });
-  const [files, setFiles] = useState<string[]>([]);
   const err = (k: string) => state.errors?.[k] && <span className="mt-1 block text-xs text-berry">{state.errors[k]}</span>;
 
   if (state.ok)
@@ -95,19 +95,9 @@ export default function CustomOrderForm({ whatsapp }: { whatsapp: string }) {
         <span className="label">Nail sizes (if you know them)</span>
         <input name="measurements" className="field" placeholder="e.g. Thumb 16, Index 12, Middle 13, Ring 12, Pinky 10 mm" />
       </label>
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-shell/50 p-6 text-center transition hover:border-berry sm:col-span-2">
-        <UploadIcon className="text-berry" />
-        <span className="text-sm font-semibold">Add inspiration photos (up to 5)</span>
-        <span className="text-xs text-muted">{files.length ? files.join(", ") : "Your outfit, Pinterest ideas, anything that helps"}</span>
-        <input
-          type="file"
-          name="images"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          className="sr-only"
-          onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5).map((f) => f.name))}
-        />
-      </label>
+      <div className="sm:col-span-2">
+        <ImageInput name="images" maxFiles={5} label="Add inspiration photos (up to 5)" hint="Your outfit, Pinterest ideas, anything that helps" />
+      </div>
       {state.message && !state.ok && <p className="rounded-xl bg-blush px-4 py-3 text-sm text-berry-dark sm:col-span-2">{state.message}</p>}
       <button className="btn-primary py-4 sm:col-span-2" disabled={pending}>
         {pending ? "Sending…" : "Send my request"}
