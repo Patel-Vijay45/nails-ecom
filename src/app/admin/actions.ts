@@ -8,7 +8,8 @@ import { NAIL_TYPES, ORDER_STATUSES, PATTERNS, REQUEST_STATUSES } from "@/lib/co
 import { db } from "@/lib/db";
 import { parseList, slugify } from "@/lib/format";
 import { saveSizes } from "@/lib/nailProfile";
-import { DEFAULT_TIP_WIDTHS, formatSizes, isPhone, normalisePhone, SEND_LATER, sizesSchema } from "@/lib/sizes";
+import { DEFAULT_TIP_WIDTHS, formatSizes, isPhone, normalisePhone, parseTipWidths, SEND_LATER, sizesSchema } from "@/lib/sizes";
+import { fitScale, parseSamples, type PhotoSample } from "@/lib/photoCalibration";
 import { saveImages } from "@/lib/uploads";
 import { pickupLocations, ShiprocketError, shiprocketMode } from "@/lib/shiprocket";
 import { bookShipment, cancelShipment, refreshTracking, restoreStock } from "@/lib/shipments";
@@ -242,6 +243,8 @@ export async function saveSettings(form: FormData) {
       ),
     },
   });
+  // Tip widths changed: re-fit the photo sizing correction to them.
+  await refitPhotoScale(parseSamples((await db.store.findUniqueOrThrow({ where: { id: 1 } })).photoSamples));
   redirect("/admin/settings?saved=1");
 }
 
@@ -361,4 +364,42 @@ export async function saveShiprocketSettings(form: FormData) {
     },
   });
   redirect("/admin/shipping?saved=1#shiprocket");
+}
+
+// ---------- Photo sizing calibration ----------
+async function refitPhotoScale(samples: PhotoSample[]) {
+  const store = await getStore();
+  const tips = parseTipWidths(store.tipWidths);
+  const fingers = fitScale(samples, [1, 2, 3, 4], tips);
+  const thumb = fitScale(samples, [0], tips);
+  await db.store.update({
+    where: { id: 1 },
+    data: { photoSamples: JSON.stringify(samples), photoScale: fingers.n ? fingers.scale : 1, thumbScale: thumb.n ? thumb.scale : 1 },
+  });
+}
+
+export async function addPhotoSample(form: FormData) {
+  await requireAdmin();
+  const store = await getStore();
+  const num = (v: FormDataEntryValue | null, lo: number, hi: number) => {
+    const n = parseFloat(String(v ?? ""));
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
+  };
+  const mm = [0, 1, 2, 3, 4].map((i) => num(form.get(`mm${i}`), 3, 30));
+  const truth = [0, 1, 2, 3, 4].map((i) => {
+    const t = num(form.get(`truth${i}`), 0, 11);
+    return t == null ? null : Math.round(t);
+  });
+  if (!mm.some((v, i) => v != null && truth[i] != null)) redirect("/admin/settings#photo-accuracy");
+  const samples = parseSamples(store.photoSamples);
+  samples.push({ id: Date.now().toString(36), label: str(form, "label").slice(0, 60) || `Hand ${samples.length + 1}`, at: new Date().toISOString(), mm, truth });
+  await refitPhotoScale(samples.slice(-60));
+  redirect("/admin/settings?saved=1#photo-accuracy");
+}
+
+export async function deletePhotoSample(form: FormData) {
+  await requireAdmin();
+  const store = await getStore();
+  await refitPhotoScale(parseSamples(store.photoSamples).filter((s) => s.id !== str(form, "id")));
+  redirect("/admin/settings?saved=1#photo-accuracy");
 }

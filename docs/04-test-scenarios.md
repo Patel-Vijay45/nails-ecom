@@ -60,9 +60,7 @@ npm run db:demo
 | C10 | No options | Floral Nail Stickers | No colour/shape/size, just Add to bag |
 | C11 | Made to measure validation | Royal Bride → Made to measure → Add without sizes | Error asking for every finger |
 | C12 | Saved sizes by phone | Made to measure → enter 9000000004 → Load my sizes | Right 3-6-5-6-8, Left 3-6-5-7-8 |
-| C13 ✅ | Photo sizing with ₹10 coin | Made to measure → Measure from a photo → ₹10 coin | Gold circle fits the coin; sizes fill in |
-| C13b ✅ | Photo sizing with ruler | Same, choose Ruler, put gold dots 5 cm apart | Sizes fill in |
-| C13c | Photo sizing with card | Same, choose Bank or Aadhaar card | Sizes fill in |
+| C13 ✅ | Photo sizing | Made to measure → Measure from 2 photos | See section H |
 | C15 ✅ | Real photo first | Product with uploaded photos | Main photo shows first; changing colour/shape/length switches to the live preview |
 | C14 | Write a review | Any product → Write a review | "Thank you" message; appears after admin approves |
 
@@ -152,3 +150,22 @@ Run with `SHIPROCKET_DEMO=1` in `.env` (pretend couriers, nothing charged), or w
 | G18 ✅ | Expired login | (automatic) | Logs in again by itself, call succeeds |
 | G19 ✅ | Demo label | Demo mode → Print label | Pretend label with AWB, addresses, "COD · COLLECT ₹…" |
 | G20 | Shiprocket off | Remove the Shiprocket lines from `.env` | Checkout has no delivery date and works as before; order page explains how to connect |
+
+## H. Photo sizing (2 photos + ₹10 coin)
+
+Real hands: try it on your own hand with a ₹10 coin on white paper. The ✅ checks used synthetic hands with known nail widths and real stock photos (with a coin added).
+
+| # | Scenario | How to test | Expected |
+|---|----------|-------------|----------|
+| H1 ✅ | Start | Made to measure → Measure from 2 photos | Shows what's needed (₹10 coin, white paper), hand choice, Start |
+| H2 ✅ | Automatic coin | Any photo with the coin | Gold circle drawn exactly on the coin, also without the hand being found |
+| H3 ✅ | Automatic nails | Photo of 4 fingers, flat, apart, on paper | A line across each nail, size per finger; unsure ones in orange, "Please check" |
+| H4 ✅ | Hand not found | A photo the hand model can't read | "Tap the middle of your index nail…"; 4 taps → all measured |
+| H5 ✅ | Tap accuracy | Synthetic hand, taps up to 2 mm off-centre | Same width within 0.15 mm |
+| H6 ✅ | Close-up | Tap a finger card | Close-up of that nail; dragging a dot changes the size; − / + change it by 0.3 mm |
+| H7 | Coin not found | Photo without a coin / coin half hidden | "Tap the ₹10 coin"; tap → circle appears |
+| H8 ✅ | Thumb photo | Next → thumb photo | Thumb measured (or tap it); can be skipped and chosen by hand |
+| H9 ✅ | Sizes filled in | Use these sizes | Product page shows the sizes; skipped thumb left to choose |
+| H10 | Tilted phone | Photo taken at an angle | "The coin looks oval… retake from straight above" |
+| H11 ✅ | Photos saved | Keep "Save my photos" ticked, place the order | Admin order shows fingers + thumb photos with the measuring lines |
+| H12 ✅ | Calibration | Admin → Settings → Photo sizing accuracy → Measure a hand with known sizes → enter true sizes | Correction fitted (e.g. × 1.042), accuracy shown, hand listed; Delete resets |

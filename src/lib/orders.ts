@@ -25,7 +25,7 @@ export const checkoutSchema = z.object({
         color: z.string().max(40).default(""),
         measurements: z.string().max(200).default(""),
         sizes: sizesSchema.optional(),
-        scans: z.array(scanSchema).max(2).optional(),
+        scans: z.array(scanSchema).max(4).optional(),
       }),
     )
     .min(1, "Your bag is empty")

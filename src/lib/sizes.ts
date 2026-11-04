@@ -58,5 +58,11 @@ export const scanSchema = z.object({
   nails: z.array(z.tuple([point, point])).length(5),
   mm: z.array(z.number().min(0).max(40)).length(5),
   ref: z.object({ kind: z.enum(["coin", "ruler", "card"]), mm: z.number().min(5).max(400) }).optional(),
+  // Which nails this photo measured (0 = thumb … 4 = pinky). Missing = all five (older one-photo scans).
+  fingers: z.array(z.number().int().min(0).max(4)).max(5).optional(),
 });
 export type Scan = z.infer<typeof scanSchema>;
+
+/** Calibration multipliers for photo measurements (Admin → Settings → Photo sizing accuracy). */
+export type PhotoScale = { fingers: number; thumb: number };
+export const DEFAULT_PHOTO_SCALE: PhotoScale = { fingers: 1, thumb: 1 };

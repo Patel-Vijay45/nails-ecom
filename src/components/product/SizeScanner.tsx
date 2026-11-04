@@ -1,29 +1,50 @@
 "use client";
 
-// Photo sizing helper: the customer photographs their hand next to a ₹10 coin, a ruler or a bank card.
-// Fingers are found automatically (MediaPipe, runs in the browser), dots are placed
-// on each nail, the customer fine-tunes them, and nail widths are converted to kit sizes.
+// Photo sizing: two photos per hand (four fingers, then the thumb on its own), each with a ₹10 coin.
+// Everything is measured automatically on the phone: the coin gives the scale, the hand model finds the
+// fingers, and each nail's edges are found from the colours. If something isn't found, one tap fixes it.
 
 import { useEffect, useRef, useState } from "react";
 import type { HandLandmarker } from "@mediapipe/tasks-vision";
+import { decode } from "@/lib/compressImage";
 import { FINGERS } from "@/lib/constants";
-import { CARD_WIDTH_MM, COIN_10_MM, mmToKit, REFERENCES, type RefKind, type Scan } from "@/lib/sizes";
+import { focal35FromJpeg } from "@/lib/exif";
+import { analyzePhoto, PART_FINGERS, type Analysis, type PhotoPart, type Pt } from "@/lib/nailMeasure";
+import { COIN_10_MM, DEFAULT_PHOTO_SCALE, mmToKit, type PhotoScale, type Scan } from "@/lib/sizes";
 import { CheckIcon, CloseIcon } from "../Icons";
 
-type P = [number, number]; // 0–1 of image width / height
 type Hand = "right" | "left";
-type DragId = { kind: "card"; i: 0 | 1 } | { kind: "nail"; f: number; i: 0 | 1 };
+type Shot = {
+  url: string; // shown on screen (and uploaded)
+  blob: Blob;
+  w: number; // size of the measured image; overlay coordinates use it
+  h: number;
+  data: ImageData;
+  landmarks: Pt[] | null;
+  focal35: number | null;
+  analysis: Analysis;
+  taps: Record<number, Pt>;
+  coinTap?: Pt;
+  adj: Record<number, number>; // customer's − / + changes in mm
+  manual: Record<number, { a: Pt; b: Pt }>; // lines the customer placed by hand in the close-up
+};
+/** One nail as shown: automatic result or the customer's own line. */
+type Eff = { finger: number; a: Pt; b: Pt; raw: number; confident: boolean; manual: boolean };
+type TapMode = { kind: "coin" } | { kind: "nail"; queue: number[] } | null;
+
+export type ScanResult = { hand: Hand; sizes: (number | null)[]; mm: (number | null)[]; scans: Scan[] };
 
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
-const FINGER_JOINTS: [number, number][] = [[3, 4], [7, 8], [11, 12], [15, 16], [19, 20]]; // [last joint, tip]
-const MAX_SIDE = 1600;
+const ANALYZE_SIDE = 2400;
+const SHOW_SIDE = 1600;
+const STEP_MM = 0.3;
 
 let landmarker: Promise<HandLandmarker> | null = null;
 function getLandmarker() {
   landmarker ??= (async () => {
     const { FilesetResolver, HandLandmarker } = await import("@mediapipe/tasks-vision");
     const files = await FilesetResolver.forVisionTasks("/mediapipe/wasm");
-    return HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" }, runningMode: "IMAGE", numHands: 1 });
+    return HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" }, runningMode: "IMAGE", numHands: 1, minHandDetectionConfidence: 0.3 });
   })().catch((e) => {
     landmarker = null;
     throw e;
@@ -31,35 +52,31 @@ function getLandmarker() {
   return landmarker;
 }
 
-function defaultNails(): [P, P][] {
-  return FINGERS.map((_, f) => {
-    const x = 0.22 + f * 0.14;
-    return [[x - 0.035, 0.35], [x + 0.035, 0.35]];
-  });
-}
+const r1 = (n: number) => Math.round(n * 10) / 10;
 
-const DEFAULT_REF: Record<RefKind, [P, P]> = {
-  coin: [[0.74, 0.82], [0.84, 0.82]],
-  ruler: [[0.25, 0.88], [0.55, 0.88]],
-  card: [[0.3, 0.85], [0.7, 0.85]],
-};
-
-export type ScanResult = { hand: Hand; sizes: number[]; scan: Scan | null };
-
-export default function SizeScanner({ tipWidths, onClose, onDone }: { tipWidths: number[]; onClose: () => void; onDone: (r: ScanResult) => void }) {
-  const [step, setStep] = useState<"intro" | "mark">("intro");
+export default function SizeScanner({
+  tipWidths,
+  scale = DEFAULT_PHOTO_SCALE,
+  calibrate = false,
+  onClose,
+  onDone,
+}: {
+  tipWidths: number[];
+  scale?: PhotoScale;
+  calibrate?: boolean; // admin calibration: raw measurements, no upload
+  onClose: () => void;
+  onDone: (r: ScanResult) => void;
+}) {
+  const [step, setStep] = useState<"intro" | PhotoPart | "summary">("intro");
   const [hand, setHand] = useState<Hand>("right");
-  const [img, setImg] = useState<{ url: string; w: number; h: number; blob: Blob } | null>(null);
-  const [refKind, setRefKind] = useState<RefKind>("coin");
-  const [rulerCm, setRulerCm] = useState(5);
-  const [card, setCard] = useState<[P, P]>(DEFAULT_REF.coin); // the two reference points
-  const [nails, setNails] = useState<[P, P][]>(defaultNails());
-  const [detect, setDetect] = useState<"idle" | "busy" | "found" | "none">("idle");
-  const [drag, setDrag] = useState<DragId | null>(null);
-  const [cursor, setCursor] = useState<P | null>(null);
+  const [shots, setShots] = useState<Partial<Record<PhotoPart, Shot>>>({});
+  const [skipThumb, setSkipThumb] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [tap, setTap] = useState<TapMode>(null);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
   const [consent, setConsent] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,132 +86,193 @@ export default function SizeScanner({ tipWidths, onClose, onDone }: { tipWidths:
       document.body.style.overflow = "";
     };
   }, []);
-  useEffect(() => () => {
-    if (img) URL.revokeObjectURL(img.url);
-  }, [img]);
 
-  async function onFile(file: File | undefined) {
+  const [zoom, setZoom] = useState<number | null>(null); // finger shown close up
+
+  const cal = (part: PhotoPart) => (calibrate ? 1 : part === "thumb" ? scale.thumb : scale.fingers);
+
+  /** Nails of one photo with the customer's changes applied (raw mm, before calibration and − / +). */
+  function eff(part: PhotoPart): Eff[] {
+    const s = shots[part];
+    if (!s?.analysis.coin) return [];
+    const list: Eff[] = [];
+    for (const f of PART_FINGERS[part]) {
+      const n = s.analysis.nails.find((x) => x.finger === f);
+      const man = s.manual[f];
+      const perPx = n ? n.mm / (Math.hypot(n.b.x - n.a.x, n.b.y - n.a.y) || 1) : s.analysis.mmPerPx ?? 0;
+      if (man) list.push({ finger: f, a: man.a, b: man.b, raw: r1(Math.hypot(man.b.x - man.a.x, man.b.y - man.a.y) * perPx), confident: true, manual: true });
+      else if (n) list.push({ finger: f, a: n.a, b: n.b, raw: n.mm, confident: n.confident, manual: false });
+    }
+    return list;
+  }
+
+  /** Final mm and kit size per finger (null = not measured). */
+  function results() {
+    const mm: (number | null)[] = [null, null, null, null, null];
+    for (const part of ["fingers", "thumb"] as PhotoPart[]) {
+      const s = shots[part];
+      if (!s || (part === "thumb" && skipThumb)) continue;
+      for (const n of eff(part)) mm[n.finger] = r1(n.raw * cal(part) + (s.adj[n.finger] ?? 0));
+    }
+    return { mm, sizes: mm.map((v) => (v == null ? null : mmToKit(tipWidths, v))) };
+  }
+
+  function nextTap(a: Analysis, part: PhotoPart, hadLandmarks: boolean): TapMode {
+    if (!a.coin) return { kind: "coin" };
+    const missing = PART_FINGERS[part].filter((f) => !a.nails.some((n) => n.finger === f));
+    if (!hadLandmarks || missing.length) return { kind: "nail", queue: hadLandmarks ? missing : PART_FINGERS[part] };
+    return null;
+  }
+
+  async function onFile(part: PhotoPart, file: File | undefined) {
     if (!file) return;
     setError("");
+    setNote("");
+    setBusy(true);
     try {
-      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-      const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
-      const w = Math.round(bmp.width * scale);
-      const h = Math.round(bmp.height * scale);
+      const focal35 = focal35FromJpeg(await file.slice(0, 256 * 1024).arrayBuffer());
+      const { w: ow, h: oh, draw } = await decode(file);
+      const k = Math.min(1, ANALYZE_SIDE / Math.max(ow, oh));
+      const w = Math.round(ow * k), h = Math.round(oh * k);
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
-      canvas.getContext("2d")!.drawImage(bmp, 0, 0, w, h);
-      const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.88));
-      setImg({ url: URL.createObjectURL(blob), w, h, blob });
-      setNails(defaultNails());
-      setCard(DEFAULT_REF[refKind]);
-      setStep("mark");
-      findFingers(canvas, w, h);
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+      draw(ctx, w, h);
+      const data = ctx.getImageData(0, 0, w, h);
+      // Smaller copy to show and to upload
+      const ks = Math.min(1, SHOW_SIDE / Math.max(w, h));
+      const show = document.createElement("canvas");
+      show.width = Math.round(w * ks);
+      show.height = Math.round(h * ks);
+      show.getContext("2d")!.drawImage(canvas, 0, 0, show.width, show.height);
+      const blob = await new Promise<Blob>((res, rej) => show.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.86));
+      let landmarks: Pt[] | null = null;
+      try {
+        const res = (await getLandmarker()).detect(canvas);
+        landmarks = res.landmarks[0]?.map((p) => ({ x: p.x * w, y: p.y * h })) ?? null;
+      } catch {
+        landmarks = null;
+      }
+      await new Promise((r) => setTimeout(r, 20)); // let the "Measuring…" message paint
+      const analysis = analyzePhoto(data, { part, landmarks, focal35: focal35 ?? undefined });
+      try {
+        // For testing: localStorage.sizingDebug = "1" exposes what was found.
+        if (localStorage.getItem("sizingDebug")) (window as unknown as { __sizing?: unknown }).__sizing = { part, w, h, landmarks, analysis, focal35 };
+      } catch {}
+      const prev = shots[part];
+      if (prev) URL.revokeObjectURL(prev.url);
+      setShots((s) => ({ ...s, [part]: { url: URL.createObjectURL(blob), blob, w, h, data, landmarks, focal35, analysis, taps: {}, adj: {}, manual: {} } }));
+      setZoom(null);
+      setTap(nextTap(analysis, part, Boolean(landmarks)));
     } catch {
-      setError("Couldn't open that photo. Please try a JPG or PNG.");
+      setError("Couldn't open that photo. Please try again with a JPG or PNG photo.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function findFingers(canvas: HTMLCanvasElement, w: number, h: number) {
-    setDetect("busy");
-    try {
-      const lm = await getLandmarker();
-      const res = lm.detect(canvas);
-      const pts = res.landmarks[0];
-      if (!pts) return setDetect("none");
-      setNails(
-        FINGER_JOINTS.map(([j, t], f) => {
-          const jx = pts[j].x * w, jy = pts[j].y * h, tx = pts[t].x * w, ty = pts[t].y * h;
-          const dx = tx - jx, dy = ty - jy;
-          const len = Math.hypot(dx, dy) || 1;
-          const cx = jx + dx * 0.55, cy = jy + dy * 0.55; // nail centre, a bit toward the tip
-          const half = len * (f === 0 ? 0.3 : 0.28); // rough nail half-width; customer fine-tunes
-          const nx = -dy / len, ny = dx / len;
-          const clamp = (v: number) => Math.min(1, Math.max(0, v));
-          return [
-            [clamp((cx + nx * half) / w), clamp((cy + ny * half) / h)],
-            [clamp((cx - nx * half) / w), clamp((cy - ny * half) / h)],
-          ];
-        }),
-      );
-      setDetect("found");
-    } catch {
-      setDetect("none");
-    }
+  function rerun(part: PhotoPart, patch: Partial<Shot>) {
+    const s = { ...shots[part]!, ...patch };
+    const analysis = analyzePhoto(s.data, { part, landmarks: s.landmarks, taps: s.taps, coinTap: s.coinTap, focal35: s.focal35 ?? undefined });
+    setShots((all) => ({ ...all, [part]: { ...s, analysis } }));
+    return analysis;
   }
 
-  // ----- measuring -----
-  const W = img?.w ?? 1, H = img?.h ?? 1;
-  const dist = (a: P, b: P) => Math.hypot((a[0] - b[0]) * W, (a[1] - b[1]) * H);
-  const cardPx = dist(card[0], card[1]);
-  const refMm = refKind === "coin" ? COIN_10_MM : refKind === "card" ? CARD_WIDTH_MM : Math.max(1, rulerCm) * 10;
-  const mmPerPx = cardPx > 0 ? refMm / cardPx : 0;
-  const mm = nails.map(([a, b]) => Math.round(dist(a, b) * mmPerPx * 10) / 10);
-  const sizes = mm.map((v) => mmToKit(tipWidths, v));
-  const refHelp =
-    refKind === "coin" ? "opposite edges of the coin, straight through the middle (line up the gold circle with the coin)" : refKind === "ruler" ? `two marks on the ruler exactly ${rulerCm} cm apart` : "both short ends of the card";
-  const cardTooSmall = cardPx < W * (refKind === "coin" ? 0.035 : refKind === "ruler" ? 0.05 : 0.12);
-  const odd = mm.some((v) => v < 6 || v > 22);
-
-  // ----- dragging -----
-  function toPoint(e: React.PointerEvent): P | null {
+  function onPhotoTap(part: PhotoPart, e: React.MouseEvent) {
+    const s = shots[part];
     const r = box.current?.getBoundingClientRect();
-    if (!r) return null;
-    return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+    if (!s || !r || !tap) return;
+    const p = { x: ((e.clientX - r.left) / r.width) * s.w, y: ((e.clientY - r.top) / r.height) * s.h };
+    setNote("");
+    if (tap.kind === "coin") {
+      const a = rerun(part, { coinTap: p });
+      if (!a.coin) return setNote("We still can't see the coin's edge there. Tap right in the middle of the ₹10 coin, or take a new photo on plain paper.");
+      setTap(nextTap(a, part, Boolean(s.landmarks)));
+      return;
+    }
+    const [f, ...rest] = tap.queue;
+    const taps = { ...s.taps, [f]: p };
+    const { [f]: _m, ...manual } = s.manual;
+    const { [f]: _a, ...adj } = s.adj;
+    void _m; void _a;
+    if (rest.length) {
+      setShots((all) => ({ ...all, [part]: { ...s, taps, manual, adj } }));
+      setTap({ kind: "nail", queue: rest });
+      return;
+    }
+    const a = rerun(part, { taps, manual, adj });
+    setTap(null);
+    // Nails still not found: put a line on the tapped spot for the customer to fit in the close-up.
+    const still = PART_FINGERS[part].filter((x) => !a.nails.some((n) => n.finger === x));
+    if (still.length && a.mmPerPx) {
+      const half = 5.5 / a.mmPerPx;
+      setShots((all) => {
+        const cur = all[part]!;
+        const add = Object.fromEntries(still.map((x) => { const t = taps[x] ?? p; return [x, { a: { x: t.x - half, y: t.y }, b: { x: t.x + half, y: t.y } }]; }));
+        return { ...all, [part]: { ...cur, manual: { ...cur.manual, ...add } } };
+      });
+      setZoom(still[0]);
+      setNote("We couldn't find that nail's edges on our own. Drag the two dots to the left and right edges of the nail.");
+    }
   }
-  function move(e: React.PointerEvent) {
-    if (!drag) return;
-    const p = toPoint(e);
-    if (!p) return;
-    setCursor(p);
-    if (drag.kind === "card") setCard((c) => (drag.i === 0 ? [p, c[1]] : [c[0], p]));
-    else setNails((ns) => ns.map((n, f) => (f === drag.f ? (drag.i === 0 ? [p, n[1]] : [n[0], p]) : n)) as [P, P][]);
-  }
-  function start(e: React.PointerEvent, id: DragId) {
-    e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag(id);
-    setCursor(toPoint(e));
-  }
-  const end = () => {
-    setDrag(null);
-    setCursor(null);
-  };
+
+  const adjust = (part: PhotoPart, f: number, d: number) =>
+    setShots((all) => {
+      const s = all[part]!;
+      return { ...all, [part]: { ...s, adj: { ...s.adj, [f]: r1((s.adj[f] ?? 0) + d) } } };
+    });
 
   async function finish() {
-    if (!img) return;
-    setSaving(true);
-    setError("");
-    let scan: Scan | null = null;
-    if (consent) {
-      const fd = new FormData();
-      fd.append("photo", new File([img.blob], "hand.jpg", { type: "image/jpeg" }));
-      const r = await fetch("/api/sizing-photo", { method: "POST", body: fd }).then((r) => r.json()).catch(() => ({ ok: false }));
-      if (r.ok) scan = { url: r.url, hand, card, nails, mm, ref: { kind: refKind, mm: refMm } };
+    const { mm, sizes } = results();
+    const scans: Scan[] = [];
+    if (!calibrate && consent) {
+      setSaving(true);
+      for (const part of ["fingers", "thumb"] as PhotoPart[]) {
+        const s = shots[part];
+        if (!s?.analysis.coin || (part === "thumb" && skipThumb)) continue;
+        const fd = new FormData();
+        fd.append("photo", new File([s.blob], `${part}.jpg`, { type: "image/jpeg" }));
+        const r = await fetch("/api/sizing-photo", { method: "POST", body: fd }).then((r) => r.json()).catch(() => ({ ok: false }));
+        if (!r.ok) continue;
+        const c = s.analysis.coin;
+        const nx = (p: Pt): [number, number] => [Math.min(1, Math.max(0, p.x / s.w)), Math.min(1, Math.max(0, p.y / s.h))];
+        const nails: [[number, number], [number, number]][] = [0, 1, 2, 3, 4].map(() => [[0, 0], [0, 0]]);
+        const mmArr = [0, 0, 0, 0, 0];
+        for (const n of eff(part)) {
+          const [a, b] = adjustedLine(n, s.adj[n.finger] ?? 0, cal(part));
+          nails[n.finger] = [nx(a), nx(b)];
+          mmArr[n.finger] = mm[n.finger] ?? 0;
+        }
+        scans.push({ url: r.url, hand, card: [nx({ x: c.x - c.r, y: c.y }), nx({ x: c.x + c.r, y: c.y })], nails, mm: mmArr, ref: { kind: "coin", mm: COIN_10_MM }, fingers: PART_FINGERS[part] });
+      }
+      setSaving(false);
     }
-    setSaving(false);
-    onDone({ hand, sizes, scan });
+    onDone({ hand, sizes, mm, scans });
   }
 
-  const handle = (p: P, id: DragId, color: string, label?: string) => (
-    <button
-      type="button"
-      key={JSON.stringify(id)}
-      onPointerDown={(e) => start(e, id)}
-      className="absolute z-10 grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none place-items-center active:cursor-grabbing"
-      style={{ left: `${p[0] * 100}%`, top: `${p[1] * 100}%` }}
-      aria-label={label ?? "Move point"}
-    >
-      <span className="h-3.5 w-3.5 rounded-full border-2 border-white shadow" style={{ background: color }} />
-    </button>
-  );
+  const shot = step === "fingers" || step === "thumb" ? shots[step] : undefined;
+  const part = step === "fingers" || step === "thumb" ? step : null;
+  const partDone = (p: PhotoPart) => {
+    const list = eff(p);
+    return PART_FINGERS[p].every((f) => list.some((n) => n.finger === f));
+  };
+  const { mm, sizes } = results();
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/60 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-label="Measure from a photo">
-      <div className="flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-cream shadow-2xl sm:max-h-[92vh] sm:rounded-[28px]">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/60 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-label="Measure from photos">
+      <div className="flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-cream shadow-2xl sm:max-h-[94vh] sm:rounded-[28px]">
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <p className="font-bold">Measure from a photo</p>
+          <div>
+            <p className="font-bold">{calibrate ? "Calibration photos" : "Measure from photos"}</p>
+            {step !== "intro" && (
+              <p className="text-[11px] font-semibold text-muted" data-testid="scan-progress">
+                <span className="capitalize">{hand}</span> hand · {(["fingers", "thumb", "summary"] as const).map((x, i) => (
+                  <span key={x} className={step === x ? "text-berry" : ""}>{i > 0 && " → "}{x === "fingers" ? "1. Fingers" : x === "thumb" ? "2. Thumb" : "3. Sizes"}</span>
+                ))}
+              </p>
+            )}
+          </div>
           <button type="button" onClick={onClose} className="btn-ghost -mr-2 rounded-full" aria-label="Close">
             <CloseIcon />
           </button>
@@ -203,58 +281,12 @@ export default function SizeScanner({ tipWidths, onClose, onDone }: { tipWidths:
         <div className="overflow-y-auto p-5">
           {step === "intro" && (
             <div>
-              <div className="grid place-items-center rounded-3xl bg-white p-6">
-                <svg viewBox="0 0 240 150" className="w-64" aria-hidden>
-                  {refKind === "card" && (
-                    <>
-                      <rect x="140" y="80" width="86" height="54" rx="6" fill="#e9dfd6" stroke="#c9a36a" strokeWidth="2" />
-                      <rect x="150" y="92" width="18" height="13" rx="2" fill="#c9a36a" />
-                      <text x="183" y="125" fontSize="9" textAnchor="middle" fill="#6f5f63">bank / Aadhaar card</text>
-                    </>
-                  )}
-                  {refKind === "coin" && (
-                    <>
-                      <circle cx="170" cy="112" r="20" fill="#e6c77e" stroke="#b08a3e" strokeWidth="2" />
-                      <circle cx="170" cy="112" r="12" fill="#cfd3d8" stroke="#9aa0a8" strokeWidth="1.5" />
-                      <text x="170" y="116" fontSize="10" fontWeight="700" textAnchor="middle" fill="#5a4a2a">₹10</text>
-                    </>
-                  )}
-                  {refKind === "ruler" && (
-                    <>
-                      <rect x="128" y="104" width="104" height="24" rx="3" fill="#f6e7b4" stroke="#c9a36a" strokeWidth="1.5" />
-                      {Array.from({ length: 11 }).map((_, k) => (
-                        <line key={k} x1={134 + k * 9} y1="104" x2={134 + k * 9} y2={k % 5 === 0 ? 116 : 111} stroke="#6f5f63" strokeWidth="1" />
-                      ))}
-                      <text x="180" y="125" fontSize="8" textAnchor="middle" fill="#6f5f63">school ruler / scale</text>
-                    </>
-                  )}
-                  <path d="M30 140 C30 110 40 95 50 90 L48 40 Q50 30 58 32 L62 80 L66 22 Q70 12 78 16 L80 78 L86 18 Q92 10 98 16 L98 80 L106 34 Q112 26 118 34 L114 96 C112 120 100 140 90 140 Z" fill="#f4d9d6" stroke="#8e2c48" strokeWidth="1.5" />
-                  {[[51, 36], [70, 20], [90, 17], [111, 32]].map(([x, y]) => (
-                    <ellipse key={x} cx={x + 2} cy={y + 6} rx="5" ry="7" fill="#8e2c48" opacity="0.8" />
-                  ))}
-                </svg>
+              <p className="text-sm text-ink/80">Two quick photos and we measure every nail for you. No dragging, no ruler.</p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Need icon="coin" title="A ₹10 coin" sub="27 mm, any year. Other coins vary in size." />
+                <Need icon="paper" title="White paper" sub="Or any plain, light surface" />
               </div>
-              <ol className="mt-5 space-y-2 text-sm text-ink/80">
-                <li><b>1.</b> Lay one hand <b>flat on a table</b>, fingers slightly apart, nails facing up.</li>
-                <li>
-                  <b>2.</b>{" "}
-                  {refKind === "coin" && <>Put a <b>₹10 coin</b> flat on the table right next to your fingers.</>}
-                  {refKind === "ruler" && <>Put a <b>ruler or scale</b> flat on the table right next to your fingers, with the cm marks visible.</>}
-                  {refKind === "card" && <>Put any <b>bank, debit, credit or Aadhaar card</b> flat on the table right next to your fingers.</>}
-                </li>
-                <li><b>3.</b> Hold your phone <b>straight above</b> (not at an angle), about 30 cm away, in good light.</li>
-              </ol>
-              <p className="label mt-6">What will you put next to your hand?</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.keys(REFERENCES) as RefKind[]).map((k) => (
-                  <button type="button" key={k} onClick={() => setRefKind(k)} data-active={refKind === k} className="chip h-auto flex-col rounded-2xl px-2 py-2.5 text-center">
-                    <span className="text-xs font-semibold leading-tight">{REFERENCES[k].label}</span>
-                    <span className="mt-0.5 text-[10px] font-normal opacity-70">{REFERENCES[k].hint}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 text-[11px] text-muted">Only the ₹10 coin works: ₹1, ₹2 and ₹5 coins come in different sizes depending on the year.</p>
-              <p className="label mt-5">Which hand is in the photo?</p>
+              <p className="label mt-6">Which hand?</p>
               <div className="flex gap-2">
                 {(["right", "left"] as const).map((h) => (
                   <button type="button" key={h} className="chip flex-1 capitalize" data-active={hand === h} onClick={() => setHand(h)}>
@@ -262,106 +294,358 @@ export default function SizeScanner({ tipWidths, onClose, onDone }: { tipWidths:
                   </button>
                 ))}
               </div>
-              <label className="btn-primary mt-6 w-full cursor-pointer py-4">
-                Take or choose a photo
-                <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
-              </label>
-              {error && <p className="mt-3 text-sm text-berry">{error}</p>}
-              <p className="mt-4 text-center text-xs text-muted">The photo is measured on your phone. It's only uploaded if you choose to save it with your order.</p>
+              <button type="button" className="btn-primary mt-6 w-full py-4" onClick={() => setStep("fingers")}>
+                Start
+              </button>
+              <p className="mt-4 text-center text-xs text-muted">Photos are measured on your phone. They&apos;re only uploaded if you choose to save them with your order.</p>
             </div>
           )}
 
-          {step === "mark" && img && (
+          {part && !shot && (
             <div>
-              <p className="text-sm">
-                {detect === "busy" && "Finding your fingers…"}
-                {detect === "found" && <>We found your fingers ✓ <b>Drag the pink dots</b> to the left and right edges of each nail (the widest part), and the <b>gold dots</b> to {refHelp}.</>}
-                {detect === "none" && <>We couldn&apos;t find your fingers automatically. <b>Drag each pair of pink dots</b> onto the edges of a nail, and the <b>gold dots</b> to {refHelp}.</>}
-                {detect === "idle" && "Loading…"}
-              </p>
+              <div className="grid place-items-center rounded-3xl bg-white p-4">{part === "fingers" ? <FingersArt /> : <ThumbArt />}</div>
+              <p className="mt-4 font-bold">{part === "fingers" ? "Photo 1: your four fingers" : "Photo 2: your thumb"}</p>
+              <ol className="mt-2 space-y-1.5 text-sm text-ink/80">
+                {part === "fingers" ? (
+                  <>
+                    <li>• Lay your {hand} hand <b>flat on the paper</b>, nails up, fingers <b>slightly apart</b>. Your thumb can stay out of the photo.</li>
+                    <li>• Put the <b>₹10 coin</b> on the paper just above your fingertips.</li>
+                    <li>• Hold the phone <b>straight above</b>, about a hand-span (20–25 cm) away, no zoom. Good light, no flash.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• Rest your hand at the <b>edge of the table</b> like a handshake, fingers curled down over the edge.</li>
+                    <li>• Lay your <b>thumb flat on the paper</b> so the thumbnail faces up at the camera.</li>
+                    <li>• Put the <b>₹10 coin</b> right next to the thumbnail and take the photo from straight above.</li>
+                  </>
+                )}
+              </ol>
+              <PhotoButtons onFile={(f) => onFile(part, f)} busy={busy} />
+              {error && <p className="mt-3 text-sm text-berry">{error}</p>}
+              {part === "thumb" && (
+                <button type="button" className="mt-4 w-full text-center text-xs font-semibold text-muted underline" onClick={() => { setSkipThumb(true); setStep("summary"); }}>
+                  Skip the thumb, I&apos;ll choose its size myself
+                </button>
+              )}
+              {part === "thumb" && <button type="button" className="mt-2 w-full text-center text-xs text-muted" onClick={() => setStep("fingers")}>← Back to fingers</button>}
+            </div>
+          )}
 
+          {part && shot && (
+            <div>
+              <Status shot={shot} part={part} tap={tap} busy={busy} note={note} nails={eff(part)} />
               <div
                 ref={box}
-                className="relative mt-3 select-none overflow-hidden rounded-2xl bg-ink touch-none"
-                onPointerMove={move}
-                onPointerUp={end}
-                onPointerCancel={end}
+                className={`relative mt-3 select-none overflow-hidden rounded-2xl bg-ink ${tap ? "cursor-crosshair ring-4 ring-berry/60" : ""}`}
+                onClick={(e) => onPhotoTap(part, e)}
+                data-testid="scan-photo"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url} alt="Your hand" className="block w-full" draggable={false} />
-                <svg viewBox={`0 0 ${W} ${H}`} className="pointer-events-none absolute inset-0 h-full w-full">
-                  <line x1={card[0][0] * W} y1={card[0][1] * H} x2={card[1][0] * W} y2={card[1][1] * H} stroke="#c9a36a" strokeWidth={W / 300} strokeDasharray={`${W / 80} ${W / 160}`} />
-                  {refKind === "coin" && (
-                    <circle cx={((card[0][0] + card[1][0]) / 2) * W} cy={((card[0][1] + card[1][1]) / 2) * H} r={cardPx / 2} fill="none" stroke="#c9a36a" strokeWidth={W / 400} />
+                <img src={shot.url} alt="Your photo" className="block w-full" draggable={false} />
+                <svg viewBox={`0 0 ${shot.w} ${shot.h}`} className="pointer-events-none absolute inset-0 h-full w-full">
+                  {shot.analysis.coin && (
+                    <circle cx={shot.analysis.coin.x} cy={shot.analysis.coin.y} r={shot.analysis.coin.r} fill="none" stroke="#e8c26a" strokeWidth={shot.w / 300} />
                   )}
-                  {nails.map(([a, b], f) => (
-                    <g key={f}>
-                      <line x1={a[0] * W} y1={a[1] * H} x2={b[0] * W} y2={b[1] * H} stroke="#e0567a" strokeWidth={W / 350} />
-                      <text x={((a[0] + b[0]) / 2) * W} y={((a[1] + b[1]) / 2) * H - W / 70} fontSize={W / 40} fontWeight="700" fill="#fff" stroke="#1e1418" strokeWidth={W / 400} paintOrder="stroke" textAnchor="middle">
-                        {FINGERS[f][0]}
-                      </text>
-                    </g>
+                  {eff(part).map((n) => {
+                    const [a, b] = adjustedLine(n, shot.adj[n.finger] ?? 0, cal(part));
+                    const color = n.confident ? "#ff4f86" : "#ffb020";
+                    return (
+                      <g key={n.finger}>
+                        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#fff" strokeWidth={shot.w / 180} strokeLinecap="round" />
+                        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color} strokeWidth={shot.w / 320} strokeLinecap="round" />
+                        <text x={(a.x + b.x) / 2} y={Math.min(a.y, b.y) - shot.w / 60} fontSize={shot.w / 34} fontWeight="700" fill="#fff" stroke="#1e1418" strokeWidth={shot.w / 450} paintOrder="stroke" textAnchor="middle">
+                          {sizes[n.finger] ?? ""}{n.confident ? "" : "?"}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {Object.entries(shot.taps).map(([f, p]) => (
+                    <circle key={f} cx={p.x} cy={p.y} r={shot.w / 140} fill="#ff4f86" stroke="#fff" strokeWidth={shot.w / 600} />
                   ))}
                 </svg>
-                {card.map((p, i) => handle(p, { kind: "card", i: i as 0 | 1 }, "#c9a36a", `Reference point ${i + 1}`))}
-                {nails.flatMap(([a, b], f) => [
-                  handle(a, { kind: "nail", f, i: 0 }, "#e0567a", `${FINGERS[f]} nail edge 1`),
-                  handle(b, { kind: "nail", f, i: 1 }, "#e0567a", `${FINGERS[f]} nail edge 2`),
-                ])}
-                {/* Magnifier while dragging, so the finger doesn't hide the dot */}
-                {drag && cursor && (
-                  <div
-                    className={`pointer-events-none absolute top-2 z-20 h-32 w-32 ${cursor[0] < 0.4 && cursor[1] < 0.4 ? "right-2" : "left-2"} overflow-hidden rounded-full border-4 border-white shadow-xl`}
-                    style={{
-                      backgroundImage: `url(${img.url})`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundSize: `${(box.current?.clientWidth ?? 0) * 3}px auto`,
-                      backgroundPosition: `${60 - cursor[0] * (box.current?.clientWidth ?? 0) * 3}px ${60 - cursor[1] * (box.current?.clientHeight ?? 0) * 3}px`,
-                    }}
-                  >
-                    <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/80" />
-                    <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/80" />
-                  </div>
-                )}
               </div>
 
-              <div className="mt-4 grid grid-cols-5 gap-2 text-center">
+              {shot.analysis.coin && zoom != null && PART_FINGERS[part].includes(zoom) && (() => {
+                const n = eff(part).find((x) => x.finger === zoom);
+                if (!n) return null;
+                const [a, b] = adjustedLine(n, shot.adj[zoom] ?? 0, cal(part));
+                const perPx = n.raw / (Math.hypot(n.b.x - n.a.x, n.b.y - n.a.y) || 1);
+                return (
+                  <NailZoom
+                    shot={shot}
+                    a={a}
+                    b={b}
+                    mmPerPx={perPx}
+                    label={FINGERS[zoom]}
+                    size={sizes[zoom]}
+                    mm={mm[zoom]}
+                    onMove={(na, nb) => {
+                      // The customer's own line replaces the automatic one (and any − / +)
+                      setShots((all) => {
+                        const cur = all[part]!;
+                        const { [zoom]: _x, ...adj } = cur.adj;
+                        void _x;
+                        return { ...all, [part]: { ...cur, adj, manual: { ...cur.manual, [zoom]: { a: na, b: nb } } } };
+                      });
+                    }}
+                    onStep={(d) => adjust(part, zoom, d)}
+                    onRetap={() => { setZoom(null); setNote(""); setTap({ kind: "nail", queue: [zoom] }); }}
+                    onClose={() => { setZoom(null); setNote(""); }}
+                  />
+                );
+              })()}
+
+              {shot.analysis.coin && (
+                <div className={`mt-4 grid gap-2 ${part === "thumb" ? "grid-cols-1" : "grid-cols-4"}`} data-testid="finger-results">
+                  {PART_FINGERS[part].map((f) => {
+                    const n = eff(part).find((x) => x.finger === f);
+                    return (
+                      <button
+                        type="button"
+                        key={f}
+                        onClick={() => { setNote(""); if (n) setZoom(f); else setTap({ kind: "nail", queue: [f] }); }}
+                        className={`rounded-2xl bg-white p-2 text-center transition hover:shadow ${n && !n.confident ? "ring-2 ring-[#ffb020]" : ""} ${zoom === f ? "ring-2 ring-berry" : ""}`}
+                        data-testid={`finger-${f}`}
+                      >
+                        <span className="block text-[11px] font-semibold text-muted">{FINGERS[f]}</span>
+                        <span className="block text-2xl font-bold" data-testid={`size-${f}`}>{n ? sizes[f] : "–"}</span>
+                        <span className="block text-[11px] text-muted">{n ? `${mm[f]?.toFixed(1)} mm` : "not found"}</span>
+                        <span className="mt-1 block text-[11px] font-semibold text-berry underline">{n ? (n.confident ? "Check" : "Please check") : "Tap nail"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="mt-5 flex gap-2">
+                <label className="btn-outline cursor-pointer">
+                  Retake
+                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(part, e.target.files?.[0])} />
+                </label>
+                <button
+                  type="button"
+                  className="btn-primary flex-1"
+                  disabled={!partDone(part) || busy || Boolean(tap)}
+                  onClick={() => { setTap(null); setNote(""); setStep(part === "fingers" ? "thumb" : "summary"); }}
+                >
+                  {part === "fingers" ? "Looks right → thumb" : "Looks right → see sizes"}
+                </button>
+              </div>
+              {part === "thumb" && !partDone("thumb") && (
+                <button type="button" className="mt-3 w-full text-center text-xs font-semibold text-muted underline" onClick={() => { setSkipThumb(true); setTap(null); setStep("summary"); }}>
+                  Skip the thumb, I&apos;ll choose its size myself
+                </button>
+              )}
+            </div>
+          )}
+
+          {step === "summary" && (
+            <div>
+              <p className="font-bold">Your {hand} hand sizes</p>
+              <div className="mt-3 grid grid-cols-5 gap-2 text-center" data-testid="summary-sizes">
                 {FINGERS.map((f, i) => (
                   <div key={f} className="rounded-2xl bg-white p-2">
                     <p className="text-[11px] font-semibold text-muted">{f}</p>
-                    <p className="text-xl font-bold">{sizes[i]}</p>
-                    <p className="text-[11px] text-muted">{mm[i].toFixed(1)} mm</p>
+                    <p className="text-2xl font-bold">{sizes[i] ?? "–"}</p>
+                    <p className="text-[11px] text-muted">{mm[i] != null ? `${mm[i]!.toFixed(1)} mm` : "choose later"}</p>
                   </div>
                 ))}
               </div>
-              {refKind === "ruler" && (
-                <label className="mt-4 flex items-center gap-2 text-sm">
-                  Gold dots are
-                  <input type="number" min={1} max={30} value={rulerCm} onChange={(e) => setRulerCm(Math.min(30, Math.max(1, Number(e.target.value) || 1)))} className="field w-20 px-2 py-1.5 text-center" aria-label="Distance between gold dots in cm" />
-                  cm apart on the ruler
-                </label>
+              {!calibrate && (
+                <>
+                  <p className="mt-4 rounded-2xl bg-shell p-3 text-xs text-muted">
+                    Photo sizes are usually right or one size off. Our nail artist checks your photos before making your set, and messages you on WhatsApp if anything looks off.
+                  </p>
+                  <label className="mt-4 flex items-start gap-2 text-sm">
+                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-berry" />
+                    <span>Save my photos with the order so the artist can double-check my sizes</span>
+                  </label>
+                </>
               )}
-              {cardTooSmall && <p className="mt-3 rounded-xl bg-[#fdf0d5] px-4 py-2 text-xs text-[#8a5a00]">Move the gold dots to {refHelp}.</p>}
-              {!cardTooSmall && odd && <p className="mt-3 rounded-xl bg-[#fdf0d5] px-4 py-2 text-xs text-[#8a5a00]">Some sizes look unusual. Check that each pink pair sits on the edges of one nail.</p>}
-
-              <label className="mt-4 flex items-start gap-2 text-sm">
-                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-berry" />
-                <span>Save this photo with my order so the artist can double-check my sizes</span>
-              </label>
-              {error && <p className="mt-3 text-sm text-berry">{error}</p>}
               <div className="mt-5 flex gap-2">
-                <label className="btn-outline cursor-pointer">
-                  New photo
-                  <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
-                </label>
-                <button type="button" onClick={finish} disabled={saving || cardTooSmall} className="btn-primary flex-1">
-                  {saving ? "Saving…" : (<><CheckIcon width={18} height={18} /> Use these sizes for my {hand} hand</>)}
+                <button type="button" className="btn-outline" onClick={() => { setSkipThumb(false); setStep(shots.thumb ? "thumb" : "fingers"); }}>Back</button>
+                <button type="button" onClick={finish} disabled={saving} className="btn-primary flex-1">
+                  {saving ? "Saving…" : (<><CheckIcon width={18} height={18} /> {calibrate ? "Use these measurements" : `Use these sizes for my ${hand} hand`}</>)}
                 </button>
               </div>
-              <p className="mt-3 text-center text-xs text-muted">Photo sizes are a close estimate. For the most exact fit, use the sizing kit.</p>
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Nail line endpoints after the customer's − / + (in shown mm). */
+function adjustedLine(n: { a: Pt; b: Pt; raw: number }, adj: number, cal: number): [Pt, Pt] {
+  // The line marks the nail's edges in the photo: calibration changes the millimetres, not the line.
+  const k = n.raw > 0 ? (n.raw + adj / cal) / n.raw : 1;
+  const m = { x: (n.a.x + n.b.x) / 2, y: (n.a.y + n.b.y) / 2 };
+  return [
+    { x: m.x + (n.a.x - m.x) * k, y: m.y + (n.a.y - m.y) * k },
+    { x: m.x + (n.b.x - m.x) * k, y: m.y + (n.b.y - m.y) * k },
+  ];
+}
+
+function Status({ shot, part, tap, busy, note, nails }: { shot: Shot; part: PhotoPart; tap: TapMode; busy: boolean; note: string; nails: Eff[] }) {
+  const a = shot.analysis;
+  const box = (tone: "ok" | "warn" | "tap", text: React.ReactNode) => (
+    <p
+      className={`rounded-2xl px-4 py-3 text-sm ${tone === "ok" ? "bg-[#e3ede6] text-[#2f6b44]" : tone === "tap" ? "bg-berry text-white" : "bg-[#fdf0d5] text-[#8a5a00]"}`}
+      data-testid="scan-status"
+    >
+      {text}
+    </p>
+  );
+  if (busy) return box("warn", "Measuring your nails…");
+  if (note) return box("warn", note);
+  if (tap?.kind === "coin") return box("tap", <><b>Tap the ₹10 coin</b> in the photo. We couldn&apos;t spot it on our own.</>);
+  if (tap?.kind === "nail") {
+    const f = tap.queue[0];
+    return box("tap", <><b>Tap the middle of your {FINGERS[f].toLowerCase()} nail</b>{tap.queue.length > 1 ? ` (${tap.queue.length} to go)` : ""}.{!shot.landmarks && part === "fingers" ? " We couldn't find your hand on our own." : ""}</>);
+  }
+  const unsure = nails.filter((n) => !n.confident).length;
+  if (a.tilted) return box("warn", <>The coin looks oval, so the phone was tilted. For the most exact size, <b>retake from straight above</b>. Otherwise check the lines.</>);
+  if (unsure) return box("warn", <>Please check the <b>orange lines</b>: tap a finger below to see its nail up close and fit the line to the nail&apos;s edges.</>);
+  return box("ok", <>✓ Measured. Each line should go across a nail at its widest, edge to edge. Tap a finger below to check it up close.</>);
+}
+
+function PhotoButtons({ onFile, busy }: { onFile: (f: File | undefined) => void; busy: boolean }) {
+  return (
+    <div className="mt-5 space-y-2">
+      <label className={`btn-primary w-full cursor-pointer py-4 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+        {busy ? "Measuring…" : "Take photo"}
+        <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} data-testid="photo-camera" />
+      </label>
+      <label className={`btn-outline w-full cursor-pointer ${busy ? "pointer-events-none opacity-60" : ""}`}>
+        Choose from gallery
+        <input type="file" accept="image/*" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} data-testid="photo-gallery" />
+      </label>
+    </div>
+  );
+}
+
+function Need({ icon, title, sub }: { icon: "coin" | "paper"; title: string; sub: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white p-3">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
+        {icon === "coin" ? (
+          <>
+            <circle cx="20" cy="20" r="17" fill="#e6c77e" stroke="#b08a3e" strokeWidth="2" />
+            <circle cx="20" cy="20" r="10" fill="#cfd3d8" stroke="#9aa0a8" strokeWidth="1.5" />
+            <text x="20" y="24" fontSize="10" fontWeight="700" textAnchor="middle" fill="#5a4a2a">₹10</text>
+          </>
+        ) : (
+          <rect x="7" y="4" width="26" height="32" rx="2" fill="#fff" stroke="#c9bdb5" strokeWidth="2" />
+        )}
+      </svg>
+      <span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block text-[11px] text-muted">{sub}</span>
+      </span>
+    </div>
+  );
+}
+
+function FingersArt() {
+  return (
+    <svg viewBox="0 0 260 170" className="w-64" aria-hidden>
+      <rect x="20" y="10" width="220" height="150" rx="4" fill="#fbfaf7" stroke="#d9d0c8" />
+      <circle cx="196" cy="42" r="15" fill="#e6c77e" stroke="#b08a3e" strokeWidth="2" />
+      <circle cx="196" cy="42" r="9" fill="#cfd3d8" stroke="#9aa0a8" strokeWidth="1.2" />
+      <path d="M70 168 L72 120 L66 62 Q66 50 76 50 Q86 50 86 62 L92 112 L96 46 Q97 34 107 34 Q117 34 117 46 L118 110 L124 44 Q125 32 135 32 Q145 33 144 46 L142 112 L152 62 Q154 52 163 54 Q172 57 169 68 L160 124 L156 168 Z" fill="#f2cdbb" stroke="#8e2c48" strokeWidth="1.4" />
+      {[[76, 57], [107, 41], [135, 39], [162, 61]].map(([x, y]) => (
+        <ellipse key={x} cx={x} cy={y + 3} rx="5.5" ry="7" fill="#e58aa5" stroke="#8e2c48" strokeWidth="0.8" />
+      ))}
+      <g transform="translate(212 92)">
+        <rect x="-11" y="-20" width="22" height="38" rx="4" fill="#1f1a1c" />
+        <circle cx="0" cy="-12" r="3" fill="#6f6a6c" />
+      </g>
+      <path d="M212 118 L212 140" stroke="#8e2c48" strokeWidth="1.4" strokeDasharray="3 3" />
+      <text x="212" y="152" fontSize="9" textAnchor="middle" fill="#6f5f63">straight above</text>
+    </svg>
+  );
+}
+
+function ThumbArt() {
+  return (
+    <svg viewBox="0 0 260 170" className="w-64" aria-hidden>
+      <rect x="10" y="10" width="240" height="96" rx="3" fill="#fbfaf7" stroke="#d9d0c8" />
+      <line x1="0" y1="106" x2="260" y2="106" stroke="#8a7a70" strokeWidth="3" />
+      <text x="16" y="122" fontSize="9" fill="#6f5f63">table edge</text>
+      <path d="M60 106 Q58 80 80 70 L150 64 Q172 62 176 74 Q180 88 160 92 L104 98 Q96 104 100 106 Z" fill="#f2cdbb" stroke="#8e2c48" strokeWidth="1.4" />
+      <ellipse cx="160" cy="78" rx="11" ry="8" fill="#e58aa5" stroke="#8e2c48" strokeWidth="0.8" />
+      <path d="M60 106 Q56 140 76 160 L118 160 Q132 140 118 106" fill="#f2cdbb" stroke="#8e2c48" strokeWidth="1.4" opacity="0.55" />
+      <text x="96" y="140" fontSize="8" textAnchor="middle" fill="#6f5f63">fingers curled</text>
+      <text x="96" y="150" fontSize="8" textAnchor="middle" fill="#6f5f63">below the edge</text>
+      <circle cx="208" cy="76" r="15" fill="#e6c77e" stroke="#b08a3e" strokeWidth="2" />
+      <circle cx="208" cy="76" r="9" fill="#cfd3d8" stroke="#9aa0a8" strokeWidth="1.2" />
+      <text x="160" y="56" fontSize="9" textAnchor="middle" fill="#8e2c48" fontWeight="700">nail faces up</text>
+    </svg>
+  );
+}
+
+/** Close-up of one nail with its measuring line; the two dots can be dragged to the nail's edges. */
+function NailZoom({ shot, a, b, mmPerPx, label, size, mm, onMove, onStep, onRetap, onClose }: {
+  shot: Shot; a: Pt; b: Pt; mmPerPx: number; label: string; size: number | null; mm: number | null;
+  onMove: (a: Pt, b: Pt) => void; onStep: (d: number) => void; onRetap: () => void; onClose: () => void;
+}) {
+  const svg = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<0 | 1 | null>(null);
+  // Fixed view while dragging, so the picture doesn't move under the finger
+  const [view, setView] = useState(() => {
+    const R = 11 / Math.max(mmPerPx, 1e-6);
+    const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return { x: c.x - R, y: c.y - R, s: 2 * R };
+  });
+  useEffect(() => {
+    if (drag != null) return;
+    const R = 11 / Math.max(mmPerPx, 1e-6);
+    const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    setView((v) => (Math.hypot(v.x + v.s / 2 - c.x, v.y + v.s / 2 - c.y) > R * 0.5 ? { x: c.x - R, y: c.y - R, s: 2 * R } : v));
+  }, [a.x, a.y, b.x, b.y, mmPerPx, drag]);
+  const toSvg = (e: React.PointerEvent): Pt | null => {
+    const el = svg.current;
+    const m = el?.getScreenCTM();
+    if (!el || !m) return null;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  };
+  const dot = view.s / 34;
+  return (
+    <div className="mt-4 rounded-3xl bg-white p-3" data-testid="nail-zoom">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-sm font-bold">{label} nail, close up</p>
+        <p className="text-sm"><b className="text-lg">{size ?? "–"}</b> <span className="text-muted">· {mm?.toFixed(1)} mm</span></p>
+      </div>
+      <svg
+        ref={svg}
+        viewBox={`${view.x} ${view.y} ${view.s} ${view.s}`}
+        className="mt-2 aspect-square w-full touch-none select-none rounded-2xl bg-ink"
+        onPointerMove={(e) => {
+          if (drag == null) return;
+          const p = toSvg(e);
+          if (p) onMove(drag === 0 ? p : a, drag === 1 ? p : b);
+        }}
+        onPointerUp={() => setDrag(null)}
+        onPointerCancel={() => setDrag(null)}
+      >
+        <image href={shot.url} x={0} y={0} width={shot.w} height={shot.h} preserveAspectRatio="none" />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#fff" strokeWidth={dot * 0.45} strokeLinecap="round" />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ff4f86" strokeWidth={dot * 0.25} strokeLinecap="round" />
+        {[a, b].map((p, i) => (
+          <g key={i} onPointerDown={(e) => { e.preventDefault(); (e.target as Element).setPointerCapture?.(e.pointerId); setDrag(i as 0 | 1); }} className="cursor-grab" data-testid={`zoom-dot-${i}`}>
+            <circle cx={p.x} cy={p.y} r={dot * 2.2} fill="transparent" />
+            <circle cx={p.x} cy={p.y} r={dot * 0.8} fill="#ff4f86" stroke="#fff" strokeWidth={dot * 0.3} />
+          </g>
+        ))}
+      </svg>
+      <p className="mt-2 px-1 text-xs text-muted">Drag the dots to the left and right edges of the nail where it&apos;s widest (not the skin around it).</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" className="btn-outline h-10 w-10 p-0 text-lg" onClick={() => onStep(-STEP_MM)} aria-label="Narrower">−</button>
+        <button type="button" className="btn-outline h-10 w-10 p-0 text-lg" onClick={() => onStep(STEP_MM)} aria-label="Wider">+</button>
+        <button type="button" className="btn-ghost text-xs text-berry" onClick={onRetap}>Tap this nail again</button>
+        <button type="button" className="btn-primary ml-auto py-2.5" onClick={onClose}>Done</button>
       </div>
     </div>
   );

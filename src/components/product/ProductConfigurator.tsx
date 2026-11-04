@@ -6,7 +6,7 @@ import type { ProductView } from "@/lib/catalog";
 import { PATTERN_LABEL, SIZES } from "@/lib/constants";
 import { swatch } from "@/lib/colors";
 import { inr } from "@/lib/format";
-import { formatSizes, SEND_LATER } from "@/lib/sizes";
+import { formatSizes, SEND_LATER, type PhotoScale } from "@/lib/sizes";
 import { useCart } from "../cart/CartProvider";
 import { CheckIcon, MinusIcon, PlusIcon, RulerIcon } from "../Icons";
 import NailArt from "../NailArt";
@@ -19,7 +19,7 @@ const SIZE_HELP: Record<string, string> = {
   L: "Thumb 18mm · Index 13mm",
 };
 
-export default function ProductConfigurator({ p, tipWidths }: { p: ProductView; tipWidths: number[] }) {
+export default function ProductConfigurator({ p, tipWidths, photoScale }: { p: ProductView; tipWidths: number[]; photoScale?: PhotoScale }) {
   const { add } = useCart();
   const router = useRouter();
   const hasOptions = p.shapes.length > 0;
@@ -186,7 +186,7 @@ export default function ProductConfigurator({ p, tipWidths }: { p: ProductView; 
             </OptionGroup>
             {!custom && size && <p className="-mt-4 text-xs text-muted">Size {size}: {SIZE_HELP[size]}. Every set includes 24 nails across 12 sizes.</p>}
 
-            {custom && <SizePicker value={sizes} onChange={setSizes} tipWidths={tipWidths} />}
+            {custom && <SizePicker value={sizes} onChange={setSizes} tipWidths={tipWidths} photoScale={photoScale} />}
           </div>
         )}
 

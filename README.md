@@ -22,6 +22,7 @@ A complete, dynamic online store for selling handmade press-on nails, custom des
 | 5 | [Nail types](docs/05-nail-types.md) | Research: 11 shapes, 5 lengths, nail systems, 19 finishes, colour families |
 | 6 | [Shipping & address plan](docs/06-shipping-and-address-plan.md) | How to charge shipping, courier costs, free pincode autofill vs paid location lookup |
 | 7 | [Shiprocket setup](docs/07-shiprocket-setup.md) | Connect Shiprocket, book couriers and print labels from the admin panel, automatic tracking, demo mode |
+| 8 | [Photo sizing](docs/08-photo-sizing.md) | How nail sizes are measured from 2 photos, how accurate it is, and how to calibrate it to your kit |
 
 ---
 
@@ -62,7 +63,7 @@ flowchart LR
 3. **Fit.** Standard sizes **XS–L** (every box has 24 nails in 12 sizes), or **Made to measure** (extra fee set per product), where they pick their **sizing-kit numbers (0–11)** for each finger, for one or both hands. Unsure customers can buy the **₹99 Sizing Kit**.
    - **Sizes are saved by phone number.** On the same phone they fill in automatically; on a new device the customer taps **Load my sizes** and enters their number. If they choose "send sizes on WhatsApp" but have ordered before, their saved sizes are used automatically.
    - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
-   - **No kit? Measure from a photo.** The customer photographs one hand flat on a table next to a **₹10 coin** (27 mm in every series), a **ruler / scale**, or a **bank / Aadhaar card** (85.6 mm). Fingers are found automatically and measuring dots are placed on each nail. The customer drags the dots to the nail edges with a magnifier (and lines up a gold circle with the coin), and the tool converts each width to a kit size using your tip widths (**Admin → Settings → Sizing kit tip widths**). If the customer agrees, the photo with the measuring lines is attached to the order so the artist can double-check it.
+   - **No kit? Measure from 2 photos.** The customer puts a **₹10 coin** on white paper and takes two photos: the **four fingers** lying flat, then the **thumb on its own** (laid flat at the table edge, so its nail faces the camera). The coin, the fingers and each nail's edges are found **automatically**, and every nail gets a size. Anything the system isn't sure about is marked "Please check". Tapping a finger shows that nail **close up**, where the line can be fitted to the nail with a drag. If something isn't found, one tap on it fixes that. Sizes use your tip widths (**Admin → Settings**) and your shop's **photo sizing correction**, learned from hands whose sizes you know (see [docs/08-photo-sizing.md](docs/08-photo-sizing.md)). If the customer agrees, the photos with the measuring lines are attached to the order so the artist can double-check them.
 4. **Bag.** A slide-out bag shows a free-shipping progress bar and suggests add-ons (glue, tabs, prep kit).
 5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). Typing the **pincode fills in city and state** and suggests area names (free India Post data). Remote-area rules can add extra shipping or turn off cash on delivery for some pincodes. With Shiprocket connected, checkout also shows **"Delivery by about …"** and refuses pincodes no courier serves. The server recalculates every price from the database, so prices can't be tampered with.
 6. **Pay.**
@@ -84,7 +85,7 @@ flowchart LR
 | **Shipping** | Remote-area rules by pincode prefix (extra ₹, cash on delivery on/off, note shown to customer), a "test a pincode" box (with courier prices once Shiprocket is connected), **Shiprocket settings** (pickup address, box size, packing days, webhook), and real courier cost vs shipping charged. Example rules for J&K, North-East, Sikkim, Andaman and Lakshadweep are added **switched off**: check the amounts and turn them on. |
 | **Coupons** | % or ₹ off, minimum order, usage limit, expiry date, pause/delete |
 | **Reviews** | Customer reviews wait here until you approve them |
-| **Settings** | Tip widths for each sizing-kit size (used by photo sizing), shop name, artist name, banner, home headline (wrap a word in `*stars*` to make it italic), about text, WhatsApp, Instagram, shipping fee, free-shipping threshold, COD on/off and fee, dispatch times |
+| **Settings** | Tip widths for each sizing-kit size (used by photo sizing), **photo sizing accuracy** (measure hands with known sizes; the shop learns a correction and shows its accuracy), shop name, artist name, banner, home headline (wrap a word in `*stars*` to make it italic), about text, WhatsApp, Instagram, shipping fee, free-shipping threshold, COD on/off and fee, dispatch times |
 
 Stock goes down automatically when an order is placed, and back up if you cancel the order or mark it *Returned to us*.
 

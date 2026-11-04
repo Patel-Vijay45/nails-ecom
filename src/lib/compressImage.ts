@@ -3,7 +3,7 @@
 
 const KEEP_AS_IS = ["image/jpeg", "image/png", "image/webp"];
 
-async function decode(file: File): Promise<{ draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void; w: number; h: number }> {
+export async function decode(file: File): Promise<{ draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void; w: number; h: number }> {
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
     return { w: bmp.width, h: bmp.height, draw: (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h) };

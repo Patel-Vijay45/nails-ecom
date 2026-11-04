@@ -31,6 +31,10 @@ model Store {
   dispatchDays       String  @default("Ready-made: 1–2 days · Made-to-measure: 3–5 days")
   // Width in mm of each sizing-kit tip, size 0 (widest) to 11. Used by photo sizing.
   tipWidths          String  @default("[18,17,16,15,14,13,12,11,10,9,8,7]")
+  // Photo sizing calibration: measured mm × scale = size used. Fitted from photos of hands with known kit sizes.
+  photoScale         Float   @default(1)
+  thumbScale         Float   @default(1)
+  photoSamples       String  @default("[]") // JSON: [{ id, label, at, mm: [5], truth: [5] }]
   // Shiprocket (phase 2). API login details live in .env, not here.
   pickupLocation     String  @default("") // pickup location name exactly as in Shiprocket → Settings → Pickup addresses
   pickupPincode      String  @default("")

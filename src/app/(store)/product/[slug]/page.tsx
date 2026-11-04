@@ -52,7 +52,7 @@ export default async function ProductPage({ params }: { params: Params }) {
         <span className="text-ink">{p.name}</span>
       </nav>
 
-      <ProductConfigurator p={p} tipWidths={parseTipWidths(store.tipWidths)} />
+      <ProductConfigurator p={p} tipWidths={parseTipWidths(store.tipWidths)} photoScale={{ fingers: store.photoScale, thumb: store.thumbScale }} />
 
       <section className="mt-20 grid gap-6 md:grid-cols-3">
         {[

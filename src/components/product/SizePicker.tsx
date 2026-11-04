@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FINGERS } from "@/lib/constants";
-import { KIT_SIZES, type NailSizes, type Scan } from "@/lib/sizes";
+import { KIT_SIZES, type NailSizes, type PhotoScale, type Scan } from "@/lib/sizes";
 import SizeScanner, { type ScanResult } from "./SizeScanner";
 
 export type SizeState = { right: (number | null)[]; left: (number | null)[]; same: boolean; later: boolean; scans: Scan[] };
@@ -23,7 +23,7 @@ function fromSaved(sizes: NailSizes): SizeState {
   return { right: sizes.right, left: sizes.left, same, later: false, scans: [] };
 }
 
-export default function SizePicker({ value, onChange, tipWidths }: { value: SizeState; onChange: (v: SizeState) => void; tipWidths: number[] }) {
+export default function SizePicker({ value, onChange, tipWidths, photoScale }: { value: SizeState; onChange: (v: SizeState) => void; tipWidths: number[]; photoScale?: PhotoScale }) {
   const [scanning, setScanning] = useState(false);
   const [phone, setPhone] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -56,14 +56,23 @@ export default function SizePicker({ value, onChange, tipWidths }: { value: Size
 
   function applyScan(r: ScanResult) {
     setScanning(false);
-    const scans = [...value.scans.filter((s) => s.hand !== r.hand), ...(r.scan ? [r.scan] : [])];
-    if (r.hand === "right") onChange({ ...value, right: r.sizes, left: value.same ? r.sizes : value.left, later: false, scans });
-    else onChange({ ...value, left: r.sizes, same: false, right: value.same && value.right.some((v) => v === null) ? r.sizes : value.right, later: false, scans });
+    const scans = [...value.scans.filter((s) => s.hand !== r.hand), ...r.scans];
+    // Keep any size the photos didn't measure (e.g. a skipped thumb) as it was.
+    const merge = (old: (number | null)[]) => r.sizes.map((v, i) => v ?? old[i]);
+    if (r.hand === "right") {
+      const right = merge(value.right);
+      onChange({ ...value, right, left: value.same ? right : value.left, later: false, scans });
+    } else {
+      const left = merge(value.same ? value.right : value.left);
+      onChange({ ...value, left, same: false, right: value.same && value.right.some((v) => v === null) ? left : value.right, later: false, scans });
+    }
+    const skipped = r.sizes.some((v) => v === null);
     setMsg({
       ok: true,
-      text: r.hand === "right" && value.same
-        ? "Sizes filled in from your photo ✓ If your left hand is different, untick 'Both hands are the same' and measure it too."
-        : `Sizes for your ${r.hand} hand filled in from your photo ✓`,
+      text:
+        (r.hand === "right" && value.same
+          ? "Sizes filled in from your photos ✓ If your left hand is different, untick 'Both hands are the same' and measure it too."
+          : `Sizes for your ${r.hand} hand filled in from your photos ✓`) + (skipped ? " Choose your thumb size below." : ""),
     });
   }
 
@@ -132,9 +141,9 @@ export default function SizePicker({ value, onChange, tipWidths }: { value: Size
           <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
           <circle cx="12" cy="13" r="3.5" />
         </svg>
-        No kit? Measure from a photo
+        No kit? Measure from 2 photos
       </button>
-      {scanning && <SizeScanner tipWidths={tipWidths} onClose={() => setScanning(false)} onDone={applyScan} />}
+      {scanning && <SizeScanner tipWidths={tipWidths} scale={photoScale} onClose={() => setScanning(false)} onDone={applyScan} />}
 
       <div className="mt-4 space-y-4">
         {row("right", value.same ? "Both hands" : "Right hand")}

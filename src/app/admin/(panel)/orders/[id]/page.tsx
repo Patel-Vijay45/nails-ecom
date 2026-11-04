@@ -192,6 +192,7 @@ function readScans(json: string): Scan[] {
 
 /** Customer's photo with the measuring lines they placed, so the artist can double-check. */
 function ScanView({ scan }: { scan: Scan }) {
+  const measured = scan.fingers ?? [0, 1, 2, 3, 4];
   const line = (a: [number, number], b: [number, number], color: string, key: string) => (
     <line key={key} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
   );
@@ -202,13 +203,13 @@ function ScanView({ scan }: { scan: Scan }) {
         <img src={scan.url} alt={`${scan.hand} hand photo`} className="block w-full" />
         <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
           {line(scan.card[0], scan.card[1], "#c9a36a", "card")}
-          {scan.nails.map(([a, b], f) => line(a, b, "#e0567a", String(f)))}
+          {scan.nails.map(([a, b], f) => (measured.includes(f) ? line(a, b, "#e0567a", String(f)) : null))}
         </svg>
       </a>
       <figcaption className="mt-1 text-[11px] text-muted">
-        <b className="text-ink">{scan.hand === "right" ? "Right" : "Left"} hand photo</b>
+        <b className="text-ink">{scan.hand === "right" ? "Right" : "Left"} hand{scan.fingers ? (scan.fingers.includes(0) ? " · thumb" : " · fingers") : ""} photo</b>
         {scan.ref && <> · measured with {scan.ref.kind === "coin" ? "₹10 coin" : scan.ref.kind === "card" ? "card" : `ruler (${scan.ref.mm / 10} cm)`}</>} ·{" "}
-        {scan.mm.map((m, f) => `${FINGERS[f][0]} ${m}mm`).join(" · ")}
+        {measured.map((f) => `${FINGERS[f][0]} ${scan.mm[f]}mm`).join(" · ")}
       </figcaption>
     </figure>
   );
