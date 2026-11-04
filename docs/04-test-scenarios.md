@@ -167,5 +167,7 @@ Real hands: try it on your own hand with a ₹10 coin on white paper. The ✅ ch
 | H8 ✅ | Thumb photo | Next → thumb photo | Thumb measured (or tap it); can be skipped and chosen by hand |
 | H9 ✅ | Sizes filled in | Use these sizes | Product page shows the sizes; skipped thumb left to choose |
 | H10 | Tilted phone | Photo taken at an angle | "The coin looks oval… retake from straight above" |
+| H13 ✅ | Unsure nails must be checked | Photo where some lines are orange | Button says "Check N nails up close"; each opens close up; "Correct ✓ next nail" |
+| H14 | Dark / too-close photo | Dim room, or phone ~10 cm away | Warning to retake in daylight / from a hand-span away |
 | H11 ✅ | Photos saved | Keep "Save my photos" ticked, place the order | Admin order shows fingers + thumb photos with the measuring lines |
 | H12 ✅ | Calibration | Admin → Settings → Photo sizing accuracy → Measure a hand with known sizes → enter true sizes | Correction fitted (e.g. × 1.042), accuracy shown, hand listed; Delete resets |

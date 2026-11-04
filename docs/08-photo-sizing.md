@@ -30,11 +30,13 @@ Tested on 250 synthetic nails with known widths. These cover four skin tones, na
 | | Result |
 |---|---|
 | Coin found | 100% (size within 1.7%) |
-| Nails the system is confident about | **all within 0.5 mm**, i.e. the right kit size or one step away (tips usually differ by ~1 mm) |
-| All nails | 85% within 0.5 mm, 91% within 1 mm; the rest are marked "Please check" |
-| Tapped nails | the same result within 0.15 mm even when the tap is 2 mm off-centre |
+| Nails the system is confident about (3 in 4) | **all within 0.5 mm**, i.e. the right kit size or one step away (tips usually differ by ~1 mm) |
+| All nails | 92% within 0.5 mm; the rest are marked "Please check" or need a tap |
+| Tapped nails | the same result within 0.1 mm even when the tap is 1 mm off-centre |
 
-**On real photos**, polished nails were measured well. **Natural nails on fair skin** were the hardest: their edges are faint, so they're usually marked "Please check" and fitted in the close-up. Real-world accuracy also depends on things a test can't copy: how flat the hand is, nail curve, and lighting. Measure it on real hands with the calibration below.
+**First real phone test** (darker skin, dim indoor light, lined notebook paper, phone about 10 cm away): the coin and the hand were found, but the first version put two lines on the finger's edge instead of the nail's (17 mm instead of ~12 mm) and drew the thumb line along the nail. Both bugs are fixed. On that photo the nail is only slightly lighter than the skin around it, so automatic results are still not reliable there. That's why any nail the system is unsure about must now be **checked up close** before the customer can continue, and the app warns when a photo is too dark or taken too close.
+
+**On stock photos**, polished nails were measured well. **Natural nails on fair skin** were the hardest: their edges are faint, so they're usually marked "Please check" and fitted in the close-up. Real-world accuracy also depends on things a test can't copy: how flat the hand is, nail curve, and lighting. Measure it on real hands with the calibration below.
 
 What to tell customers: *"Photo sizing is usually spot on or one size off. Our artist checks your photos before making your set."* For a guaranteed fit, the ₹99 sizing kit is still the safest.
 
@@ -51,7 +53,9 @@ The correction is applied to every customer's photo sizing straight away.
 
 ## 8.5 Tips if results look off
 
-- **White paper** under the hand and coin. Wooden tables are close to skin colour.
+- **Plain white paper** (printer paper) under the hand and coin. No lines; wooden tables are close to skin colour.
+- **Bright light**, near a window in daylight. In dim light the nail edges disappear.
+- **A hand-span away** (20–25 cm). Very close shots distort the size and are hard to correct.
 - **Fingers apart**, so there's paper between them.
 - **Straight above** the hand. If the coin looks oval, the app asks for a retake.
 - **No zoom, no flash**, good daylight.

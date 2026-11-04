@@ -333,14 +333,11 @@ function sampleLine(img: Img, c: Pt, v: Pt, half: number, step: number, sigma: n
 }
 
 /**
- * Measures a nail using the finger's outline against the background:
- * 1. lines across the finger near the tip give the finger's true centre line and direction,
- * 2. walking along that line finds the real fingertip,
- * 3. on lines across the nail, the nail's two side edges are the strongest matching pair of colour edges
- *    inside the finger outline. The widest part of the nail is its size.
- * `tip` and `u` (direction towards the tip) only need to be roughly right.
+ * The finger's true centre line, direction and tip, from its outline against the background
+ * (lines across the finger near the tip). `tip` and `u` (towards the tip) only need to be roughly right.
+ * Also returns the skin colour further down the finger. Null when the outline can't be seen.
  */
-export function measureNailOutline(img: Img, tip: Pt, u0: Pt, o: { pxPerMm: number; bg: F3; thumb?: boolean }): NailMeasure | null {
+export function fingerLine(img: Img, tip: Pt, u0: Pt, o: { pxPerMm: number; bg: F3; thumb?: boolean }): { tip: Pt; u: Pt; skin: F3 } | null {
   const mm = o.pxPerMm;
   const step = Math.max(0.35, Math.min(1, mm * 0.08));
   const sigma = Math.max(0.8, (0.12 * mm) / step);
@@ -378,67 +375,8 @@ export function measureNailOutline(img: Img, tip: Pt, u0: Pt, o: { pxPerMm: numb
     u = { x: -back.x / bl, y: -back.y / bl };
     T = p0;
   }
-  // 2. The fingertip point now sits on the finger's centre line (a light nail tip can't be told from paper,
-  //    so lines are taken from just beyond the tip; lines that miss the finger are skipped).
-  const v = { x: -u.y, y: u.x };
-  const tipPt = T;
   if (dist(S, o.bg) < 15) return null; // skin and background look alike: outline unusable
-
-  // 3. Nail side edges on lines across the nail
-  type Row = { c: Pt; l: number; r: number; fl: number; fr: number; score: number };
-  const rows: Row[] = [];
-  for (let d = -1.5; d <= 14; d += 0.6) {
-    const c = { x: tipPt.x - u.x * d * mm, y: tipPt.y - u.y * d * mm };
-    const { f, ci } = sampleLine(img, c, v, half, step, sigma);
-    const e = fingerEdges(f, ci, o.bg, S, step, mm);
-    if (!e) continue;
-    const fl = ci + Math.round(e.l / step), fr = ci + Math.round(e.r / step);
-    const w = fr - fl;
-    if ((w * step) / mm < 7) continue;
-    const g = f.map((_, i) => (i > 0 && i < f.length - 1 ? dist(f[i - 1], f[i + 1]) : 0));
-    const minBand = Math.max(1, Math.round(Math.max(0.25 * mm, 0.03 * w * step) / step));
-    const maxBand = Math.round(0.3 * w);
-    // strongest edges on each side (local maxima), then the best-matching pair
-    const peaks = (from: number, to: number) => {
-      const list: { i: number; g: number }[] = [];
-      for (let i = Math.max(1, from); i <= Math.min(f.length - 2, to); i++) if (g[i] >= g[i - 1] && g[i] >= g[i + 1] && g[i] > 2) list.push({ i, g: g[i] });
-      return list.sort((x, y) => y.g - x.g).slice(0, 6);
-    };
-    const L = peaks(fl + minBand, fl + maxBand), R = peaks(fr - maxBand, fr - minBand);
-    let best: { l: number; r: number; score: number } | null = null;
-    for (const pl of L)
-      for (const pr of R) {
-        const bl = pl.i - fl, br = fr - pr.i;
-        const sym = 1 - Math.min(1, Math.abs(bl - br) / Math.max(bl, br, 1)) * 0.6;
-        const score = Math.min(pl.g, pr.g) * sym;
-        if (!best || score > best.score) best = { l: pl.i, r: pr.i, score };
-      }
-    if (!best) continue;
-    // sub-sample peak positions
-    const refine = (i: number) => {
-      const a = g[i - 1], b = g[i], cc = g[i + 1], den = a - 2 * b + cc;
-      return i + (den < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (a - cc)) / den)) : 0);
-    };
-    rows.push({ c, l: (refine(best.l) - ci) * step, r: (refine(best.r) - ci) * step, fl: e.l, fr: e.r, score: best.score });
-  }
-  if (rows.length < 3) return null;
-  const top = Math.max(...rows.map((r) => r.score));
-  const good = rows.filter((r) => r.score >= top * 0.45);
-  const widths = good.map((r) => r.r - r.l).sort((a, b) => a - b);
-  const est = widths[Math.min(widths.length - 1, Math.floor(widths.length * 0.75))];
-  const pick = good.reduce((a, b) => (Math.abs(b.r - b.l - est) < Math.abs(a.r - a.l - est) ? b : a));
-  const fingerW = median(good.map((r) => r.fr - r.fl));
-  const ratio = est / fingerW;
-  const near = widths.filter((w) => Math.abs(w - est) / est < 0.08).length;
-  const confident = good.length >= 4 && near >= 3 && ratio > 0.6 && ratio < 0.95 && top >= 8;
-  const mid = (pick.l + pick.r) / 2;
-  return {
-    a: { x: pick.c.x + v.x * (mid - est / 2), y: pick.c.y + v.y * (mid - est / 2) },
-    b: { x: pick.c.x + v.x * (mid + est / 2), y: pick.c.y + v.y * (mid + est / 2) },
-    px: est,
-    confident,
-    method: "edges",
-  };
+  return { tip: T, u, skin: S };
 }
 
 /**
@@ -446,7 +384,8 @@ export function measureNailOutline(img: Img, tip: Pt, u0: Pt, o: { pxPerMm: numb
  * On lines across the finger, the nail's sides are the best pair of colour edges: both strong, centred
  * near the point, with a clear colour change between inside and just outside (shine streaks fail this).
  */
-export function measureNailAround(img: Img, P: Pt, u0: Pt, o: { pxPerMm: number; thumb?: boolean; offCentre?: number; bg?: F3 | null }): NailMeasure | null {
+type AroundOpts = { pxPerMm: number; thumb?: boolean; offCentre?: number; bg?: F3 | null; skin?: F3 | null; spread?: number; along?: number };
+export function measureNailAround(img: Img, P: Pt, u0: Pt, o: AroundOpts): NailMeasure | null {
   // The finger direction may be off: try angles around it. Nail sides run roughly parallel, so a line straight
   // across gives the narrowest width; lines at a slant measure wider.
   const rot = (d: number) => ({ x: u0.x * Math.cos(d) - u0.y * Math.sin(d), y: u0.x * Math.sin(d) + u0.y * Math.cos(d) });
@@ -456,7 +395,8 @@ export function measureNailAround(img: Img, P: Pt, u0: Pt, o: { pxPerMm: number;
     if (r) tries.push({ d, ...r });
   };
   const deg = Math.PI / 180;
-  for (let d = -35; d <= 35; d += 7) run(d * deg);
+  const spread = o.spread ?? 35;
+  for (let d = -spread; d <= spread + 1e-9; d += Math.max(2, spread / 5)) run(d * deg);
   if (!tries.length) return null;
   const pickBest = () => {
     const strong = Math.max(...tries.map((t) => t.top));
@@ -467,7 +407,7 @@ export function measureNailAround(img: Img, P: Pt, u0: Pt, o: { pxPerMm: number;
   return pickBest().m;
 }
 
-function nailRowsAt(img: Img, P: Pt, u: Pt, o: { pxPerMm: number; thumb?: boolean; offCentre?: number; bg?: F3 | null }): { m: NailMeasure; top: number } | null {
+function nailRowsAt(img: Img, P: Pt, u: Pt, o: AroundOpts): { m: NailMeasure; top: number } | null {
   const mm = o.pxPerMm;
   const step = Math.max(0.35, Math.min(1, mm * 0.08));
   const sigma = Math.max(0.8, (0.12 * mm) / step);
@@ -477,14 +417,15 @@ function nailRowsAt(img: Img, P: Pt, u: Pt, o: { pxPerMm: number; thumb?: boolea
   const offScale = (o.offCentre ?? 4) * mm;
   type Row = { c: Pt; l: number; r: number; score: number };
   const rows: Row[] = [];
-  for (let a = -5; a <= 5; a += 0.6) {
+  const along = o.along ?? 5;
+  for (let a = -along; a <= along + 1e-9; a += 0.6) {
     const c = { x: P.x + u.x * a * mm, y: P.y + u.y * a * mm };
     const { f, ci } = sampleLine(img, c, v, half, step, sigma);
     const g = f.map((_, i) => (i > 0 && i < f.length - 1 ? dist(f[i - 1], f[i + 1]) : 0));
     const peaks = (from: number, to: number) => {
       const list: { i: number; g: number }[] = [];
-      for (let i = Math.max(1, from); i <= Math.min(f.length - 2, to); i++) if (g[i] >= g[i - 1] && g[i] >= g[i + 1] && g[i] > 3) list.push({ i, g: g[i] });
-      return list.sort((x, y) => y.g - x.g).slice(0, 8);
+      for (let i = Math.max(1, from); i <= Math.min(f.length - 2, to); i++) if (g[i] >= g[i - 1] && g[i] >= g[i + 1] && g[i] > 2) list.push({ i, g: g[i] });
+      return list.sort((x, y) => y.g - x.g).slice(0, 10);
     };
     const inner = Math.round((1.5 * mm) / step);
     const L = peaks(0, ci - inner), R = peaks(ci + inner, f.length - 1);
@@ -500,16 +441,23 @@ function nailRowsAt(img: Img, P: Pt, u: Pt, o: { pxPerMm: number; thumb?: boolea
         const outR = medianF(f.slice(pr.i + out, Math.min(f.length, pr.i + out2 + 1)));
         const inL = medianF(f.slice(pl.i + out, pl.i + out2 + 1));
         const inR = medianF(f.slice(Math.max(0, pr.i - out2), pr.i - out + 1));
-        const contrast = Math.min(1, Math.min(dist(inL, outL), dist(inR, outR)) / 25);
+        const contrast = Math.min(1, Math.min(dist(inL, outL), dist(inR, outR)) / 12);
         // A nail has the same colour on both inner sides and skin on both outer sides; a shine streak doesn't.
         const sym = (1 - 0.6 * Math.min(1, dist(outL, outR) / 40)) * (1 - 0.2 * Math.min(1, dist(inL, inR) / 60));
-        // Paper just outside an edge = that's the finger's outline, not the nail's side
-        const outline = o.bg && Math.min(dist(outL, o.bg), dist(outR, o.bg)) < 18 ? 0.25 : 1;
-        const score = Math.min(pl.g, pr.g) * centre * contrast * sym * outline;
+        // Paper just outside an edge = that's the finger's outline, never the nail's side
+        if (o.bg && Math.min(dist(outL, o.bg), dist(outR, o.bg)) < 18) continue;
+        const outline = 1;
+        // Just inside both edges should look like the middle of the nail…
+        const cw = Math.max(1, Math.round((1 * mm) / step)), cm = Math.round((pl.i + pr.i) / 2);
+        const C = medianF(f.slice(cm - cw, cm + cw + 1));
+        const nailLike = 1 - 0.7 * Math.min(1, Math.max(dist(inL, C), dist(inR, C)) / 45);
+        // …and just outside both edges like skin (when the skin colour is known)
+        const skinOut = o.skin ? 1 - 0.6 * Math.min(1, Math.max(dist(outL, o.skin), dist(outR, o.skin)) / 55) : 1;
+        const score = Math.min(pl.g, pr.g) * centre * contrast * sym * outline * nailLike * skinOut;
         if (!Number.isFinite(score)) continue; // edge too close to the end of the line
         if (!best || score > best.score) best = { l: pl.i, r: pr.i, score };
       }
-    if (!best || best.score < 2) continue;
+    if (!best || best.score < 0.8) continue;
     const refine = (i: number) => {
       const p0 = g[i - 1], p1 = g[i], p2 = g[i + 1], den = p0 - 2 * p1 + p2;
       return i + (den < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (p0 - p2)) / den)) : 0);
@@ -534,7 +482,7 @@ function nailRowsAt(img: Img, P: Pt, u: Pt, o: { pxPerMm: number; thumb?: boolea
       a: { x: pick.c.x + v.x * (mid - est / 2), y: pick.c.y + v.y * (mid - est / 2) },
       b: { x: pick.c.x + v.x * (mid + est / 2), y: pick.c.y + v.y * (mid + est / 2) },
       px: est,
-      confident: good.length >= 5 && near >= 4 && top >= 6,
+      confident: good.length >= 5 && near >= 4 && top >= 3,
       method: "edges",
     },
   };
@@ -560,6 +508,40 @@ export function axisAt(img: Img, p: Pt, radius: number): Pt {
   return { x: -Math.sin(th), y: Math.cos(th) };
 }
 
+/**
+ * Finger direction at a tapped nail: from the tap, the finger runs a long way towards the hand and only a
+ * short way to the tip. Rays are cast all round until they reach the background. Returns the direction
+ * towards the tip, or null if the background colour is unknown or too close to skin.
+ */
+export function fingerDirFromTap(img: Img, tap: Pt, pxPerMm: number, bg: F3): Pt | null {
+  const N = 72, maxLen = 70 * pxPerMm, step = Math.max(1, pxPerMm * 0.5);
+  const len: number[] = [];
+  if (dist(fAt(img, tap.x, tap.y), bg) < 15) return null;
+  for (let k = 0; k < N; k++) {
+    const th = (k / N) * Math.PI * 2, dx = Math.cos(th), dy = Math.sin(th);
+    let run = 0, d = 0;
+    for (; d < maxLen; d += step) {
+      const x = tap.x + dx * d, y = tap.y + dy * d;
+      if (x < 0 || y < 0 || x >= img.width || y >= img.height) break;
+      run = dist(fAt(img, x, y), bg) < 18 ? run + step : 0;
+      if (run >= 1.5 * pxPerMm) { d -= run; break; }
+    }
+    len.push(d);
+  }
+  // Smooth over neighbouring angles; the longest direction points to the hand
+  const sm = len.map((_, k) => (len[(k + N - 2) % N] + len[(k + N - 1) % N] + len[k] + len[(k + 1) % N] + len[(k + 2) % N]) / 5);
+  let best = 0;
+  for (let k = 1; k < N; k++) if (sm[k] > sm[best]) best = k;
+  if (sm[best] < 15 * pxPerMm) return null; // no long finger found
+  const th = (best / N) * Math.PI * 2;
+  return { x: -Math.cos(th), y: -Math.sin(th) };
+}
+
+/** Skin colour further down the finger from a point on the nail. */
+function skinBehind(img: Img, P: Pt, u: Pt, pxPerMm: number): F3 {
+  return medianF([11, 13, 15].flatMap((d) => [-1, 0, 1].map((t) => fAt(img, P.x - u.x * d * pxPerMm - u.y * t * pxPerMm, P.y - u.y * d * pxPerMm + u.x * t * pxPerMm))));
+}
+
 // ---------- whole photo ----------
 
 export type PhotoPart = "fingers" | "thumb";
@@ -576,6 +558,8 @@ export type Analysis = {
   pxPerMm: number | null;
   mmPerPx: number | null; // at the height of the nails (after the camera-distance correction)
   tilted: boolean;
+  tooClose: boolean; // phone held closer than ~15 cm: the height correction gets large and less certain
+  dark: boolean; // paper looks dark: dim light hides the nail edges
   nails: NailResult[];
   handFound: boolean;
   missing: number[]; // fingers we couldn't measure
@@ -591,9 +575,12 @@ function segDist(p: Pt, a: Pt, b: Pt) {
  * Camera-distance correction: nails are `h` mm above the coin, so they look a little bigger.
  * Distance comes from the coin's size and the lens (35 mm-equivalent focal length, 26 mm on most phone main cameras).
  */
-export function heightFactor(img: Img, coinR: number, part: PhotoPart, focal35 = 26) {
+export function cameraDistanceMm(img: Img, coinR: number, focal35 = 26) {
   const fPx = (focal35 * Math.hypot(img.width, img.height)) / 43.27;
-  const distMm = Math.min(800, Math.max(120, (fPx * COIN_MM) / (2 * coinR)));
+  return (fPx * COIN_MM) / (2 * coinR);
+}
+export function heightFactor(img: Img, coinR: number, part: PhotoPart, focal35 = 26) {
+  const distMm = Math.min(800, Math.max(80, cameraDistanceMm(img, coinR, focal35)));
   return (distMm - NAIL_HEIGHT[part]) / distMm;
 }
 
@@ -616,7 +603,7 @@ export function analyzePhoto(img: Img, o: { part: PhotoPart; landmarks: Pt[] | n
   const fingerHalf = lm ? median(fingers.map((f) => Math.hypot(lm[NAIL_JOINTS[f][1]].x - lm[NAIL_JOINTS[f][0]].x, lm[NAIL_JOINTS[f][1]].y - lm[NAIL_JOINTS[f][0]].y))) * 0.4 : 0;
   const skip = lm ? (p: Pt) => BONES.some(([a, b]) => segDist(p, lm[a], lm[b]) < fingerHalf) : undefined;
   const coin = findCoin(img, o.coinTap ? { rMin: minSide * 0.015, rMax: minSide * 0.25, near: o.coinTap, nearDist: minSide * 0.12 } : { rMin, rMax, skip });
-  const out: Analysis = { coin, pxPerMm: null, mmPerPx: null, tilted: false, nails: [], handFound: Boolean(lm), missing: [] };
+  const out: Analysis = { coin, pxPerMm: null, mmPerPx: null, tilted: false, tooClose: false, dark: false, nails: [], handFound: Boolean(lm), missing: [] };
   if (!coin) {
     out.missing = fingers;
     return out;
@@ -625,6 +612,8 @@ export function analyzePhoto(img: Img, o: { part: PhotoPart; landmarks: Pt[] | n
   out.pxPerMm = pxPerMm;
   out.tilted = coin.ellipticity > 1.08;
   const bg = backgroundAround(img, coin);
+  out.tooClose = cameraDistanceMm(img, coin.r, o.focal35) < 150;
+  out.dark = bg[0] / LUMA_W < 140; // paper brightness (0–255)
   const hf = heightFactor(img, coin.r, o.part, o.focal35);
   out.mmPerPx = hf / pxPerMm;
   for (const f of fingers) {
@@ -639,18 +628,23 @@ export function analyzePhoto(img: Img, o: { part: PhotoPart; landmarks: Pt[] | n
     };
     const tapPt = o.taps?.[f];
     if (tapPt) {
-      // The customer tapped this nail: measure around the tap.
-      const u = dirOf() ?? axisAt(img, tapPt, 9 * pxPerMm);
-      m = measureNailAround(img, tapPt, u, { pxPerMm, thumb, offCentre: 3, bg });
+      // The customer tapped this nail: find the finger's direction, then the nail's edges around the tap.
+      const known = dirOf() ?? fingerDirFromTap(img, tapPt, pxPerMm, bg);
+      const u = known ?? axisAt(img, tapPt, 9 * pxPerMm);
+      m = measureNailAround(img, tapPt, u, { pxPerMm, thumb, offCentre: 3, bg, skin: known ? skinBehind(img, tapPt, u, pxPerMm) : null, spread: known ? 20 : 35 });
     } else if (lm) {
       const tip = lm[NAIL_JOINTS[f][1]], base = lm[NAIL_JOINTS[f][0]], u = dirOf()!;
-      // 1. Finger outline against the paper (best when fingers are apart on plain paper)
-      m = measureNailOutline(img, tip, u, { pxPerMm, bg, thumb });
+      // 1. Finger outline against the paper gives the true direction and tip; the nail centre is ~5.5 mm behind the tip
+      const line = fingerLine(img, tip, u, { pxPerMm, bg, thumb });
+      if (line) {
+        const P = { x: line.tip.x - line.u.x * 5.5 * pxPerMm, y: line.tip.y - line.u.y * 5.5 * pxPerMm };
+        m = measureNailAround(img, P, line.u, { pxPerMm, thumb, offCentre: 2.5, bg, skin: line.skin, spread: 10, along: 5 });
+      }
       // 2. Otherwise search around where the hand model thinks the nail is
       if (!m) {
         const L = Math.hypot(tip.x - base.x, tip.y - base.y);
         const guess = { x: tip.x - u.x * L * 0.3, y: tip.y - u.y * L * 0.3 };
-        m = measureNailAround(img, guess, u, { pxPerMm, thumb, offCentre: 5, bg });
+        m = measureNailAround(img, guess, u, { pxPerMm, thumb, offCentre: 5, bg, skin: skinBehind(img, guess, u, pxPerMm) });
         if (m) m.confident = false; // less sure without the outline: ask the customer to check
       }
     }

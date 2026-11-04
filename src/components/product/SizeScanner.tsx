@@ -27,6 +27,7 @@ type Shot = {
   coinTap?: Pt;
   adj: Record<number, number>; // customer's − / + changes in mm
   manual: Record<number, { a: Pt; b: Pt }>; // lines the customer placed by hand in the close-up
+  reviewed: Record<number, boolean>; // nails the customer looked at close up and confirmed
 };
 /** One nail as shown: automatic result or the customer's own line. */
 type Eff = { finger: number; a: Pt; b: Pt; raw: number; confident: boolean; manual: boolean };
@@ -101,7 +102,7 @@ export default function SizeScanner({
       const man = s.manual[f];
       const perPx = n ? n.mm / (Math.hypot(n.b.x - n.a.x, n.b.y - n.a.y) || 1) : s.analysis.mmPerPx ?? 0;
       if (man) list.push({ finger: f, a: man.a, b: man.b, raw: r1(Math.hypot(man.b.x - man.a.x, man.b.y - man.a.y) * perPx), confident: true, manual: true });
-      else if (n) list.push({ finger: f, a: n.a, b: n.b, raw: n.mm, confident: n.confident, manual: false });
+      else if (n) list.push({ finger: f, a: n.a, b: n.b, raw: n.mm, confident: n.confident || Boolean(s.reviewed[f]), manual: false });
     }
     return list;
   }
@@ -162,7 +163,7 @@ export default function SizeScanner({
       } catch {}
       const prev = shots[part];
       if (prev) URL.revokeObjectURL(prev.url);
-      setShots((s) => ({ ...s, [part]: { url: URL.createObjectURL(blob), blob, w, h, data, landmarks, focal35, analysis, taps: {}, adj: {}, manual: {} } }));
+      setShots((s) => ({ ...s, [part]: { url: URL.createObjectURL(blob), blob, w, h, data, landmarks, focal35, analysis, taps: {}, adj: {}, manual: {}, reviewed: {} } }));
       setZoom(null);
       setTap(nextTap(analysis, part, Boolean(landmarks)));
     } catch {
@@ -253,6 +254,20 @@ export default function SizeScanner({
 
   const shot = step === "fingers" || step === "thumb" ? shots[step] : undefined;
   const part = step === "fingers" || step === "thumb" ? step : null;
+  /** Nails marked "please check" that the customer hasn't confirmed yet. */
+  const toCheck = (p: PhotoPart) => {
+    const s = shots[p];
+    return eff(p).filter((n) => !n.confident && !s?.reviewed[n.finger]).map((n) => n.finger);
+  };
+  const confirmNail = (p: PhotoPart, f: number) => {
+    setShots((all) => {
+      const cur = all[p]!;
+      return { ...all, [p]: { ...cur, reviewed: { ...cur.reviewed, [f]: true } } };
+    });
+    const next = toCheck(p).filter((x) => x !== f);
+    setNote("");
+    setZoom(next.length ? next[0] : null);
+  };
   const partDone = (p: PhotoPart) => {
     const list = eff(p);
     return PART_FINGERS[p].every((f) => list.some((n) => n.finger === f));
@@ -284,7 +299,7 @@ export default function SizeScanner({
               <p className="text-sm text-ink/80">Two quick photos and we measure every nail for you. No dragging, no ruler.</p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <Need icon="coin" title="A ₹10 coin" sub="27 mm, any year. Other coins vary in size." />
-                <Need icon="paper" title="White paper" sub="Or any plain, light surface" />
+                <Need icon="paper" title="Plain white paper" sub="Printer paper is best (no lines)" />
               </div>
               <p className="label mt-6">Which hand?</p>
               <div className="flex gap-2">
@@ -310,13 +325,14 @@ export default function SizeScanner({
                   <>
                     <li>• Lay your {hand} hand <b>flat on the paper</b>, nails up, fingers <b>slightly apart</b>. Your thumb can stay out of the photo.</li>
                     <li>• Put the <b>₹10 coin</b> on the paper just above your fingertips.</li>
-                    <li>• Hold the phone <b>straight above</b>, about a hand-span (20–25 cm) away, no zoom. Good light, no flash.</li>
+                    <li>• Hold the phone <b>straight above</b>, about a hand-span (20–25 cm) away, not closer. No zoom.</li>
+                    <li>• <b>Bright light</b>: near a window in daylight is best. No flash.</li>
                   </>
                 ) : (
                   <>
                     <li>• Rest your hand at the <b>edge of the table</b> like a handshake, fingers curled down over the edge.</li>
                     <li>• Lay your <b>thumb flat on the paper</b> so the thumbnail faces up at the camera.</li>
-                    <li>• Put the <b>₹10 coin</b> right next to the thumbnail and take the photo from straight above.</li>
+                    <li>• Put the <b>₹10 coin</b> right next to the thumbnail and take the photo from straight above, a hand-span away, in bright light.</li>
                   </>
                 )}
               </ol>
@@ -390,7 +406,8 @@ export default function SizeScanner({
                     }}
                     onStep={(d) => adjust(part, zoom, d)}
                     onRetap={() => { setZoom(null); setNote(""); setTap({ kind: "nail", queue: [zoom] }); }}
-                    onClose={() => { setZoom(null); setNote(""); }}
+                    onClose={() => confirmNail(part, zoom)}
+                    left={toCheck(part).filter((x) => x !== zoom).length}
                   />
                 );
               })()}
@@ -422,14 +439,20 @@ export default function SizeScanner({
                   Retake
                   <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(part, e.target.files?.[0])} />
                 </label>
-                <button
-                  type="button"
-                  className="btn-primary flex-1"
-                  disabled={!partDone(part) || busy || Boolean(tap)}
-                  onClick={() => { setTap(null); setNote(""); setStep(part === "fingers" ? "thumb" : "summary"); }}
-                >
-                  {part === "fingers" ? "Looks right → thumb" : "Looks right → see sizes"}
-                </button>
+                {toCheck(part).length > 0 ? (
+                  <button type="button" className="btn-primary flex-1" disabled={busy || Boolean(tap)} onClick={() => { setNote(""); setZoom(toCheck(part)[0]); }}>
+                    Check {toCheck(part).length} nail{toCheck(part).length > 1 ? "s" : ""} up close →
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary flex-1"
+                    disabled={!partDone(part) || busy || Boolean(tap)}
+                    onClick={() => { setTap(null); setNote(""); setZoom(null); setStep(part === "fingers" ? "thumb" : "summary"); }}
+                  >
+                    {part === "fingers" ? "Looks right → thumb" : "Looks right → see sizes"}
+                  </button>
+                )}
               </div>
               {part === "thumb" && !partDone("thumb") && (
                 <button type="button" className="mt-3 w-full text-center text-xs font-semibold text-muted underline" onClick={() => { setSkipThumb(true); setTap(null); setStep("summary"); }}>
@@ -506,7 +529,9 @@ function Status({ shot, part, tap, busy, note, nails }: { shot: Shot; part: Phot
   }
   const unsure = nails.filter((n) => !n.confident).length;
   if (a.tilted) return box("warn", <>The coin looks oval, so the phone was tilted. For the most exact size, <b>retake from straight above</b>. Otherwise check the lines.</>);
-  if (unsure) return box("warn", <>Please check the <b>orange lines</b>: tap a finger below to see its nail up close and fit the line to the nail&apos;s edges.</>);
+  if (a.dark) return box("warn", <>The photo is quite <b>dark</b>, so nail edges are hard to see. For the most exact size, retake near a window in daylight. Otherwise check each nail up close.</>);
+  if (a.tooClose) return box("warn", <>The phone was very <b>close</b> to your hand. For the most exact size, retake from about 20–25 cm (a hand-span) away. Otherwise check each nail up close.</>);
+  if (unsure) return box("warn", <>We&apos;re not sure about the <b>orange lines</b>. Next, you&apos;ll see each of those nails up close: confirm or drag the line onto the nail&apos;s edges.</>);
   return box("ok", <>✓ Measured. Each line should go across a nail at its widest, edge to edge. Tap a finger below to check it up close.</>);
 }
 
@@ -586,9 +611,9 @@ function ThumbArt() {
 }
 
 /** Close-up of one nail with its measuring line; the two dots can be dragged to the nail's edges. */
-function NailZoom({ shot, a, b, mmPerPx, label, size, mm, onMove, onStep, onRetap, onClose }: {
+function NailZoom({ shot, a, b, mmPerPx, label, size, mm, onMove, onStep, onRetap, onClose, left }: {
   shot: Shot; a: Pt; b: Pt; mmPerPx: number; label: string; size: number | null; mm: number | null;
-  onMove: (a: Pt, b: Pt) => void; onStep: (d: number) => void; onRetap: () => void; onClose: () => void;
+  onMove: (a: Pt, b: Pt) => void; onStep: (d: number) => void; onRetap: () => void; onClose: () => void; left: number;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<0 | 1 | null>(null);
@@ -640,12 +665,12 @@ function NailZoom({ shot, a, b, mmPerPx, label, size, mm, onMove, onStep, onReta
           </g>
         ))}
       </svg>
-      <p className="mt-2 px-1 text-xs text-muted">Drag the dots to the left and right edges of the nail where it&apos;s widest (not the skin around it).</p>
+      <p className="mt-2 px-1 text-xs text-muted">Is the pink line exactly from one side of the nail to the other, at its widest? If not, drag the dots onto the nail&apos;s edges (not the skin around it).</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" className="btn-outline h-10 w-10 p-0 text-lg" onClick={() => onStep(-STEP_MM)} aria-label="Narrower">−</button>
         <button type="button" className="btn-outline h-10 w-10 p-0 text-lg" onClick={() => onStep(STEP_MM)} aria-label="Wider">+</button>
         <button type="button" className="btn-ghost text-xs text-berry" onClick={onRetap}>Tap this nail again</button>
-        <button type="button" className="btn-primary ml-auto py-2.5" onClick={onClose}>Done</button>
+        <button type="button" className="btn-primary ml-auto py-2.5" onClick={onClose}>{left ? `Correct ✓ next nail` : "Correct ✓"}</button>
       </div>
     </div>
   );
