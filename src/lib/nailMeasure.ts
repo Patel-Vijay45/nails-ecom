@@ -384,7 +384,7 @@ export function fingerLine(img: Img, tip: Pt, u0: Pt, o: { pxPerMm: number; bg: 
  * On lines across the finger, the nail's sides are the best pair of colour edges: both strong, centred
  * near the point, with a clear colour change between inside and just outside (shine streaks fail this).
  */
-type AroundOpts = { pxPerMm: number; thumb?: boolean; offCentre?: number; bg?: F3 | null; skin?: F3 | null; spread?: number; along?: number };
+type AroundOpts = { pxPerMm: number; thumb?: boolean; offCentre?: number; bg?: F3 | null; skin?: F3 | null; spread?: number; along?: number; strictSkin?: boolean };
 export function measureNailAround(img: Img, P: Pt, u0: Pt, o: AroundOpts): NailMeasure | null {
   // The finger direction may be off: try angles around it. Nail sides run roughly parallel, so a line straight
   // across gives the narrowest width; lines at a slant measure wider.
@@ -452,8 +452,14 @@ function nailRowsAt(img: Img, P: Pt, u: Pt, o: AroundOpts): { m: NailMeasure; to
         const C = medianF(f.slice(cm - cw, cm + cw + 1));
         const nailLike = 1 - 0.7 * Math.min(1, Math.max(dist(inL, C), dist(inR, C)) / 45);
         // …and just outside both edges like skin (when the skin colour is known)
-        const skinOut = o.skin ? 1 - 0.6 * Math.min(1, Math.max(dist(outL, o.skin), dist(outR, o.skin)) / 55) : 1;
-        const score = Math.min(pl.g, pr.g) * centre * contrast * sym * outline * nailLike * skinOut;
+        // (judged on colour, not brightness: skin is warm; paper, tables, prints and shadows are not)
+        const chroma = (x: F3, y: F3) => Math.hypot(x[1] - y[1], x[2] - y[2]);
+        const worst = o.skin ? Math.max(chroma(outL, o.skin), chroma(outR, o.skin)) : 0;
+        const skinOut = !o.skin ? 1 : o.strictSkin ? 1 - Math.min(1, Math.max(0, worst - 10) / 22) : 1 - 0.6 * Math.min(1, worst / 30);
+        if (skinOut <= 0) continue;
+        // …and between the edges must NOT look like skin (a line across the finger below the nail is all skin)
+        const notSkin = o.skin && o.strictSkin ? Math.min(1, Math.max(0, dist(C, o.skin) - 4) / 14) : 1;
+        const score = Math.min(pl.g, pr.g) * centre * contrast * sym * outline * nailLike * skinOut * notSkin;
         if (!Number.isFinite(score)) continue; // edge too close to the end of the line
         if (!best || score > best.score) best = { l: pl.i, r: pr.i, score };
       }
@@ -539,7 +545,8 @@ export function fingerDirFromTap(img: Img, tap: Pt, pxPerMm: number, bg: F3): Pt
 
 /** Skin colour further down the finger from a point on the nail. */
 function skinBehind(img: Img, P: Pt, u: Pt, pxPerMm: number): F3 {
-  return medianF([11, 13, 15].flatMap((d) => [-1, 0, 1].map((t) => fAt(img, P.x - u.x * d * pxPerMm - u.y * t * pxPerMm, P.y - u.y * d * pxPerMm + u.x * t * pxPerMm))));
+  // Just past the cuticle (the nail centre is ~5 mm from it); further down, knuckle creases are darker
+  return medianF([8, 9.5, 11].flatMap((d) => [-1.5, 0, 1.5].map((t) => fAt(img, P.x - u.x * d * pxPerMm - u.y * t * pxPerMm, P.y - u.y * d * pxPerMm + u.x * t * pxPerMm))));
 }
 
 // ---------- whole photo ----------
@@ -638,13 +645,13 @@ export function analyzePhoto(img: Img, o: { part: PhotoPart; landmarks: Pt[] | n
       const line = fingerLine(img, tip, u, { pxPerMm, bg, thumb });
       if (line) {
         const P = { x: line.tip.x - line.u.x * 5.5 * pxPerMm, y: line.tip.y - line.u.y * 5.5 * pxPerMm };
-        m = measureNailAround(img, P, line.u, { pxPerMm, thumb, offCentre: 2.5, bg, skin: line.skin, spread: 10, along: 5 });
+        m = measureNailAround(img, P, line.u, { pxPerMm, thumb, offCentre: 2.5, bg, skin: line.skin, spread: 10, along: 5, strictSkin: true });
       }
       // 2. Otherwise search around where the hand model thinks the nail is
       if (!m) {
         const L = Math.hypot(tip.x - base.x, tip.y - base.y);
-        const guess = { x: tip.x - u.x * L * 0.3, y: tip.y - u.y * L * 0.3 };
-        m = measureNailAround(img, guess, u, { pxPerMm, thumb, offCentre: 5, bg, skin: skinBehind(img, guess, u, pxPerMm) });
+        const guess = { x: tip.x - u.x * L * 0.15, y: tip.y - u.y * L * 0.15 };
+        m = measureNailAround(img, guess, u, { pxPerMm, thumb, offCentre: 5, bg, skin: skinBehind(img, guess, u, pxPerMm), along: 6, spread: 12, strictSkin: true });
         if (m) m.confident = false; // less sure without the outline: ask the customer to check
       }
     }
