@@ -254,10 +254,13 @@ export default function SizeScanner({
 
   const shot = step === "fingers" || step === "thumb" ? shots[step] : undefined;
   const part = step === "fingers" || step === "thumb" ? step : null;
-  /** Nails marked "please check" that the customer hasn't confirmed yet. */
+  /**
+   * Nails the customer hasn't confirmed up close yet. Every nail gets a quick look (one tap when the line is
+   * right): on real photos the automatic line is sometimes off, and a wrong size means a set that doesn't fit.
+   */
   const toCheck = (p: PhotoPart) => {
     const s = shots[p];
-    return eff(p).filter((n) => !n.confident && !s?.reviewed[n.finger]).map((n) => n.finger);
+    return eff(p).filter((n) => !n.manual && !s?.reviewed[n.finger]).map((n) => n.finger);
   };
   const confirmNail = (p: PhotoPart, f: number) => {
     setShots((all) => {
@@ -532,7 +535,7 @@ function Status({ shot, part, tap, busy, note, nails }: { shot: Shot; part: Phot
   if (a.dark) return box("warn", <>The photo is quite <b>dark</b>, so nail edges are hard to see. For the most exact size, retake near a window in daylight. Otherwise check each nail up close.</>);
   if (a.tooClose) return box("warn", <>The phone was very <b>close</b> to your hand. For the most exact size, retake from about 20–25 cm (a hand-span) away. Otherwise check each nail up close.</>);
   if (unsure) return box("warn", <>We&apos;re not sure about the <b>orange lines</b>. Next, you&apos;ll see each of those nails up close: confirm or drag the line onto the nail&apos;s edges.</>);
-  return box("ok", <>✓ Measured. Each line should go across a nail at its widest, edge to edge. Tap a finger below to check it up close.</>);
+  return box("ok", <>✓ Measured. Next, check each nail up close: the line should go across the nail at its widest, edge to edge.</>);
 }
 
 function PhotoButtons({ onFile, busy }: { onFile: (f: File | undefined) => void; busy: boolean }) {

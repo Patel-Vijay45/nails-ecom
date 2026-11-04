@@ -389,7 +389,7 @@ export function measureNailAround(img: Img, P: Pt, u0: Pt, o: AroundOpts): NailM
   // The finger direction may be off: try angles around it. Nail sides run roughly parallel, so a line straight
   // across gives the narrowest width; lines at a slant measure wider.
   const rot = (d: number) => ({ x: u0.x * Math.cos(d) - u0.y * Math.sin(d), y: u0.x * Math.sin(d) + u0.y * Math.cos(d) });
-  const tries: { d: number; m: NailMeasure; top: number }[] = [];
+  const tries: { d: number; m: NailMeasure; top: number; quality: number }[] = [];
   const run = (d: number) => {
     const r = nailRowsAt(img, P, rot(d), o);
     if (r) tries.push({ d, ...r });
@@ -398,16 +398,17 @@ export function measureNailAround(img: Img, P: Pt, u0: Pt, o: AroundOpts): NailM
   const spread = o.spread ?? 35;
   for (let d = -spread; d <= spread + 1e-9; d += Math.max(2, spread / 5)) run(d * deg);
   if (!tries.length) return null;
+  // Best angle: the most well-supported result; among near-equal ones, the narrowest (a slanted line measures wider)
   const pickBest = () => {
-    const strong = Math.max(...tries.map((t) => t.top));
-    return tries.filter((t) => t.top >= strong * 0.6).reduce((a, b) => (b.m.px < a.m.px ? b : a));
+    const bestQ = Math.max(...tries.map((t) => t.quality));
+    return tries.filter((t) => t.quality >= bestQ * 0.85).reduce((a, b) => (b.m.px < a.m.px ? b : a));
   };
   const first = pickBest();
   for (const d of [-4, -2, 2, 4]) run(first.d + d * deg);
   return pickBest().m;
 }
 
-function nailRowsAt(img: Img, P: Pt, u: Pt, o: AroundOpts): { m: NailMeasure; top: number } | null {
+function nailRowsAt(img: Img, P: Pt, u: Pt, o: AroundOpts): { m: NailMeasure; top: number; quality: number } | null {
   const mm = o.pxPerMm;
   const step = Math.max(0.35, Math.min(1, mm * 0.08));
   const sigma = Math.max(0.8, (0.12 * mm) / step);
@@ -472,23 +473,31 @@ function nailRowsAt(img: Img, P: Pt, u: Pt, o: AroundOpts): { m: NailMeasure; to
   }
   if (rows.length < 3) return null;
   const top = Math.max(...rows.map((r) => r.score));
-  // Keep lines that agree with most others (lines past the cuticle or the tip can grab other edges)
-  const strong = rows.filter((r) => r.score >= top * 0.5);
-  const medW = median(strong.map((r) => r.r - r.l)), medC = median(strong.map((r) => (r.l + r.r) / 2));
-  const good = strong.filter((r) => Math.abs(r.r - r.l - medW) <= medW * 0.15 && Math.abs((r.l + r.r) / 2 - medC) <= 1.5 * mm);
-  if (good.length < 2) return null;
+  // The nail's size is its widest part. Near the cuticle the nail curves in (narrower lines with sharp edges),
+  // and odd lines can grab other edges, so look for the widest group of at least 3 lines that agree.
+  const strong = rows.filter((r) => r.score >= top * 0.35);
+  if (strong.length < 3) return null;
+  const sorted = [...strong].sort((a, b) => b.r - b.l - (a.r - a.l));
+  let good: Row[] = [];
+  for (const cand of sorted) {
+    const w = cand.r - cand.l, c = (cand.l + cand.r) / 2;
+    const group = strong.filter((r) => Math.abs(r.r - r.l - w) <= w * 0.07 && Math.abs((r.l + r.r) / 2 - c) <= 1.5 * mm);
+    if (group.length >= 3) { good = group; break; }
+  }
+  if (!good.length) return null;
   const widths = good.map((r) => r.r - r.l).sort((a, b) => a - b);
-  const est = widths[Math.min(widths.length - 1, Math.floor(widths.length * 0.75))];
+  const est = median(widths);
   const pick = good.reduce((a, b) => (Math.abs(b.r - b.l - est) < Math.abs(a.r - a.l - est) ? b : a));
-  const near = widths.filter((w) => Math.abs(w - est) / est < 0.08).length;
   const mid = (pick.l + pick.r) / 2;
+  const quality = good.reduce((sum, r) => sum + r.score, 0);
   return {
     top,
+    quality,
     m: {
       a: { x: pick.c.x + v.x * (mid - est / 2), y: pick.c.y + v.y * (mid - est / 2) },
       b: { x: pick.c.x + v.x * (mid + est / 2), y: pick.c.y + v.y * (mid + est / 2) },
       px: est,
-      confident: good.length >= 5 && near >= 4 && top >= 3,
+      confident: good.length >= 4 && top >= 3,
       method: "edges",
     },
   };
@@ -644,8 +653,10 @@ export function analyzePhoto(img: Img, o: { part: PhotoPart; landmarks: Pt[] | n
       // 1. Finger outline against the paper gives the true direction and tip; the nail centre is ~5.5 mm behind the tip
       const line = fingerLine(img, tip, u, { pxPerMm, bg, thumb });
       if (line) {
-        const P = { x: line.tip.x - line.u.x * 5.5 * pxPerMm, y: line.tip.y - line.u.y * 5.5 * pxPerMm };
-        m = measureNailAround(img, P, line.u, { pxPerMm, thumb, offCentre: 2.5, bg, skin: line.skin, spread: 10, along: 5, strictSkin: true });
+        // The hand model's "tip" can sit anywhere from mid-nail to the fingertip, so search 8 mm either side of it;
+        // lines that don't cross the nail find no nail edges and are left out.
+        const P = { x: line.tip.x - line.u.x * 2 * pxPerMm, y: line.tip.y - line.u.y * 2 * pxPerMm };
+        m = measureNailAround(img, P, line.u, { pxPerMm, thumb, offCentre: 2.5, bg, skin: line.skin, spread: 10, along: 8, strictSkin: true });
       }
       // 2. Otherwise search around where the hand model thinks the nail is
       if (!m) {
