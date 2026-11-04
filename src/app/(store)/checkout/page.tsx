@@ -18,6 +18,10 @@ export default async function CheckoutPage() {
           codFee: store.codFee,
           onlineEnabled: razorpayEnabled(),
           storeName: store.name,
+          showDeliveryDate: store.showDeliveryDate,
+          blockUndeliverable: store.blockUndeliverable,
+          readyDays: store.readyDays,
+          customDays: store.customDays,
         }}
       />
     </div>

@@ -7,6 +7,7 @@ import { parseList } from "./format";
 import { findPincodeRule } from "./pincode";
 import { computeShipping, evaluateCoupon } from "./pricing";
 import { createRazorpayOrder, razorpayEnabled } from "./razorpay";
+import { deliveryInfo } from "./shipments";
 import { getStore } from "./store";
 import { getSavedSizes, saveSizes } from "./nailProfile";
 import { parseColors } from "./colors";
@@ -65,6 +66,16 @@ export async function placeOrder(input: CheckoutInput) {
     throw new CheckoutError(`Cash on delivery isn't available for pincode ${input.customer.pincode}. Please pay online.`);
   }
   if (input.paymentMethod === "ONLINE" && !razorpayEnabled()) throw new CheckoutError("Online payment isn't set up yet. Please choose cash on delivery.");
+  // With Shiprocket connected: refuse pincodes no courier serves, and COD where no courier collects cash.
+  if (store.blockUndeliverable) {
+    const delivery = await deliveryInfo(store, input.customer.pincode, { cod: input.paymentMethod === "COD" });
+    if (delivery && !delivery.deliverable) {
+      throw new CheckoutError(`Sorry, our couriers don't deliver to pincode ${input.customer.pincode} yet. Please message us on WhatsApp.`);
+    }
+    if (delivery && input.paymentMethod === "COD" && delivery.codAvailable === false) {
+      throw new CheckoutError(`Cash on delivery isn't available for pincode ${input.customer.pincode}. Please pay online.`);
+    }
+  }
 
   const ids = [...new Set(input.items.map((i) => i.productId))];
   const products = await db.product.findMany({ where: { id: { in: ids }, active: true } });

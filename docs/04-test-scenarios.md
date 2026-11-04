@@ -125,3 +125,30 @@ Run `npm run db:demo` first: it switches the example remote-area rules on.
 | F10 ✅ | Longest prefix wins | Admin → Shipping → add "3800"; test 380015 | Rule 3800 applies, not a shorter one |
 | F11 ✅ | Parcel weight | Place an order → admin order page | "Parcel: 150 g → billed as 0.5 kg" |
 | F12 ✅ | Real shipping cost | Enter real cost on orders → Admin → Shipping | Average cost per order and "covered" / "short by ₹…" |
+
+## G. Shiprocket courier booking
+
+Run with `SHIPROCKET_DEMO=1` in `.env` (pretend couriers, nothing charged), or with a real Shiprocket API user. In demo mode pincodes starting `99` are not serviceable and `744…` has no cash on delivery. All of these were also checked automatically against a strict fake Shiprocket API that validates every request against Shiprocket's API reference.
+
+| # | Scenario | How to test | Expected |
+|---|----------|-------------|----------|
+| G1 ✅ | Connection | Admin → Shipping | Badge "Connected" (or "Demo mode"), wallet balance, webhook URL and token status |
+| G2 ✅ | Pickup address | Choose the pickup address → Save | Pickup pincode fills in from Shiprocket |
+| G3 ✅ | Test a pincode | Shipping → test 110001 | Courier names, prices, days; COD available |
+| G4 ✅ | Delivery date at checkout | Checkout → pincode 110001 | "🚚 Delivery by about …" = packing days + courier days (making days if the bag has a made-to-measure set) |
+| G5 ✅ | No courier | Checkout → 999999 | "Our couriers don't deliver to this pincode"; order button disabled; server refuses too |
+| G6 ✅ | No COD courier | Checkout → 744101 | Cash on delivery hidden; server refuses a COD order |
+| G7 ✅ | Courier choice | Open a new COD order | Couriers with COD rates, Recommended first; warning that COD isn't confirmed |
+| G8 ✅ | Book | Pick a courier → Book shipment → OK | AWB, label + manifest links, order → Packed, real cost = courier price, tracking link filled |
+| G9 ✅ | Amounts sent | (automatic) | Shiprocket order id = our order no.; COD; sub_total + shipping + COD fee − discount = our total |
+| G10 ✅ | Low wallet | (automatic) Book with an empty wallet | "recharge your Shiprocket wallet"; booking again continues without a second order |
+| G11 ✅ | Cancel + re-book | Cancel shipment → Book again | AWB cleared; new Shiprocket order id ends in "-2" |
+| G12 ✅ | Webhook with wrong token | (automatic) | Ignored, nothing changes |
+| G13 ✅ | Webhook in transit | (automatic) | Order → Shipped; scans on admin and customer order pages |
+| G14 ✅ | Older update arrives late | (automatic) | Ignored, status doesn't go backwards |
+| G15 ✅ | Delivered | (automatic) | Order → Delivered; COD order marked Paid |
+| G16 ✅ | RTO | (automatic) | Order → Returned to us; stock goes back |
+| G17 ✅ | Refresh tracking | Order → Refresh tracking (demo: wait a minute after booking) | Latest scans saved; order → Shipped |
+| G18 ✅ | Expired login | (automatic) | Logs in again by itself, call succeeds |
+| G19 ✅ | Demo label | Demo mode → Print label | Pretend label with AWB, addresses, "COD · COLLECT ₹…" |
+| G20 | Shiprocket off | Remove the Shiprocket lines from `.env` | Checkout has no delivery date and works as before; order page explains how to connect |

@@ -13,24 +13,34 @@ datasource db {
 
 // Single row (id = 1) holding everything the owner can change from the admin panel.
 model Store {
-  id                Int     @id @default(1)
-  name              String  @default("Nailora")
-  tagline           String  @default("Hand-painted press-on nails")
-  artistName        String  @default("our nail artist")
-  announcement      String  @default("Free shipping on orders above ₹999 · Handmade in India")
-  heroTitle         String  @default("Salon nails, *hand-painted* for you.")
-  heroSubtitle      String  @default("Reusable press-on nails designed and painted by a professional nail artist. Made in your size, ready in 10 minutes, no salon visit.")
-  aboutText         String  @default("")
-  whatsapp          String  @default("919999999999")
-  email             String  @default("hello@example.com")
-  instagram         String  @default("nailora")
-  shippingFee       Int     @default(79)
-  freeShippingAbove Int     @default(999)
-  codEnabled        Boolean @default(true)
-  codFee            Int     @default(49)
-  dispatchDays      String  @default("Ready-made: 1–2 days · Made-to-measure: 3–5 days")
+  id                 Int     @id @default(1)
+  name               String  @default("Nailora")
+  tagline            String  @default("Hand-painted press-on nails")
+  artistName         String  @default("our nail artist")
+  announcement       String  @default("Free shipping on orders above ₹999 · Handmade in India")
+  heroTitle          String  @default("Salon nails, *hand-painted* for you.")
+  heroSubtitle       String  @default("Reusable press-on nails designed and painted by a professional nail artist. Made in your size, ready in 10 minutes, no salon visit.")
+  aboutText          String  @default("")
+  whatsapp           String  @default("919999999999")
+  email              String  @default("hello@example.com")
+  instagram          String  @default("nailora")
+  shippingFee        Int     @default(79)
+  freeShippingAbove  Int     @default(999)
+  codEnabled         Boolean @default(true)
+  codFee             Int     @default(49)
+  dispatchDays       String  @default("Ready-made: 1–2 days · Made-to-measure: 3–5 days")
   // Width in mm of each sizing-kit tip, size 0 (widest) to 11. Used by photo sizing.
-  tipWidths         String  @default("[18,17,16,15,14,13,12,11,10,9,8,7]")
+  tipWidths          String  @default("[18,17,16,15,14,13,12,11,10,9,8,7]")
+  // Shiprocket (phase 2). API login details live in .env, not here.
+  pickupLocation     String  @default("") // pickup location name exactly as in Shiprocket → Settings → Pickup addresses
+  pickupPincode      String  @default("")
+  boxLength          Int     @default(15) // parcel size in cm
+  boxBreadth         Int     @default(10)
+  boxHeight          Int     @default(5)
+  readyDays          Int     @default(2) // days to pack a ready-made order before the courier collects it
+  customDays         Int     @default(5) // days to make a made-to-measure order
+  showDeliveryDate   Boolean @default(true) // "Delivery by …" at checkout
+  blockUndeliverable Boolean @default(true) // refuse orders to pincodes no courier serves
 }
 
 model Collection {
@@ -111,10 +121,20 @@ model Order {
   total             Int
   couponCode        String?
   weightGrams       Int         @default(0) // total packed weight of the parcel
-  shippingCost      Int? // what the courier actually charged (entered in admin)
+  shippingCost      Int? // what the courier actually charged (entered in admin, or the rate when booked)
   courier           String      @default("")
-  trackingNumber    String      @default("")
+  trackingNumber    String      @default("") // AWB
   trackingUrl       String      @default("")
+  // Shiprocket booking
+  srOrderId         String? // Shiprocket's order id
+  srShipmentId      String?
+  shipAttempts      Int         @default(0) // bookings made; a re-booking after cancel needs a new order id
+  labelUrl          String      @default("")
+  manifestUrl       String      @default("")
+  pickupDate        String      @default("")
+  shipStatus        String      @default("") // latest courier status, e.g. "IN TRANSIT"
+  expectedDelivery  String      @default("") // courier's estimated delivery date
+  trackingEvents    String      @default("[]") // JSON: [{ date, activity, location }], newest first
   adminNotes        String      @default("")
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -139,16 +159,16 @@ model OrderItem {
 }
 
 model Coupon {
-  id         String    @id @default(cuid())
-  code       String    @unique
-  type       String    @default("PERCENT") // PERCENT | FLAT
-  value      Int
-  minOrder   Int       @default(0)
-  maxUses    Int?
-  usedCount  Int       @default(0)
-  active     Boolean   @default(true)
-  expiresAt  DateTime?
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(cuid())
+  code      String    @unique
+  type      String    @default("PERCENT") // PERCENT | FLAT
+  value     Int
+  minOrder  Int       @default(0)
+  maxUses   Int?
+  usedCount Int       @default(0)
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
 }
 
 model CustomRequest {

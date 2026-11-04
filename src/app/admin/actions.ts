@@ -10,6 +10,9 @@ import { parseList, slugify } from "@/lib/format";
 import { saveSizes } from "@/lib/nailProfile";
 import { DEFAULT_TIP_WIDTHS, formatSizes, isPhone, normalisePhone, SEND_LATER, sizesSchema } from "@/lib/sizes";
 import { saveImages } from "@/lib/uploads";
+import { pickupLocations, ShiprocketError, shiprocketMode } from "@/lib/shiprocket";
+import { bookShipment, cancelShipment, refreshTracking, restoreStock } from "@/lib/shipments";
+import { getStore } from "@/lib/store";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const int = (f: FormData, k: string, d = 0) => {
@@ -44,9 +47,7 @@ export async function updateOrder(form: FormData) {
   // Put ready-made stock back when an order is cancelled or returned.
   const wasLive = !["CANCELLED", "RTO"].includes(order.status);
   const nowDead = ["CANCELLED", "RTO"].includes(status);
-  if (wasLive && nowDead) {
-    for (const i of order.items) if (i.productId && i.size !== "Custom") await db.product.update({ where: { id: i.productId }, data: { stock: { increment: i.quantity } } });
-  }
+  if (wasLive && nowDead) await restoreStock(order);
 
   await db.order.update({
     where: { id },
@@ -284,4 +285,80 @@ export async function deletePincodeRule(form: FormData) {
   await requireAdmin();
   await db.pincodeRule.delete({ where: { id: str(form, "id") } });
   revalidatePath("/admin/shipping");
+}
+
+// ---------- Shiprocket ----------
+const shipBack = (orderId: string, tone: "ok" | "warn" | "error", msg: string): never =>
+  redirect(`/admin/orders/${orderId}?ship=${tone}&msg=${encodeURIComponent(msg.slice(0, 300))}#shipment`);
+
+export async function bookShipmentAction(form: FormData) {
+  await requireAdmin();
+  const id = str(form, "id");
+  const choice = str(form, "courier"); // "<courierId>:<rate>" or "" for Shiprocket's pick
+  const [courierId, rate] = choice.split(":").map((n) => parseInt(n, 10));
+  let result: { warnings: string[] };
+  try {
+    result = await bookShipment(id, await getStore(), Number.isFinite(courierId) ? courierId : undefined, Number.isFinite(rate) ? rate : undefined);
+  } catch (e) {
+    if (e instanceof ShiprocketError) shipBack(id, "error", e.message);
+    throw e;
+  }
+  revalidatePath(`/admin/orders/${id}`);
+  if (result.warnings.length) shipBack(id, "warn", `Courier booked, but: ${result.warnings.join(" · ")} Use "Try again" below.`);
+  shipBack(id, "ok", "Shipment booked. Print the label and stick it on the parcel.");
+}
+
+export async function refreshTrackingAction(form: FormData) {
+  await requireAdmin();
+  const id = str(form, "id");
+  let updated = false;
+  try {
+    updated = (await refreshTracking(id)).updated;
+  } catch (e) {
+    if (e instanceof ShiprocketError) shipBack(id, "error", e.message);
+    throw e;
+  }
+  revalidatePath(`/admin/orders/${id}`);
+  shipBack(id, updated ? "ok" : "warn", updated ? "Tracking updated." : "No tracking scans yet. They start once the courier picks up the parcel.");
+}
+
+export async function cancelShipmentAction(form: FormData) {
+  await requireAdmin();
+  const id = str(form, "id");
+  try {
+    await cancelShipment(id);
+  } catch (e) {
+    if (e instanceof ShiprocketError) shipBack(id, "error", `${e.message}. If the courier already picked it up, cancel it in the Shiprocket panel.`);
+    throw e;
+  }
+  revalidatePath(`/admin/orders/${id}`);
+  shipBack(id, "ok", "Shipment cancelled in Shiprocket. You can book it again.");
+}
+
+export async function saveShiprocketSettings(form: FormData) {
+  await requireAdmin();
+  const location = str(form, "pickupLocation");
+  let pincode = str(form, "pickupPincode").replace(/\D/g, "").slice(0, 6);
+  // Take the pincode from the chosen Shiprocket pickup address when it wasn't typed.
+  if (!pincode && location && shiprocketMode() !== "off") {
+    try {
+      pincode = (await pickupLocations()).find((l) => l.name === location)?.pincode ?? "";
+    } catch {}
+  }
+  const size = (k: string, d: number) => Math.min(100, Math.max(1, int(form, k, d)));
+  await db.store.update({
+    where: { id: 1 },
+    data: {
+      pickupLocation: location,
+      pickupPincode: pincode,
+      boxLength: size("boxLength", 15),
+      boxBreadth: size("boxBreadth", 10),
+      boxHeight: size("boxHeight", 5),
+      readyDays: Math.min(30, Math.max(0, int(form, "readyDays", 2))),
+      customDays: Math.min(60, Math.max(0, int(form, "customDays", 5))),
+      showDeliveryDate: bool(form, "showDeliveryDate"),
+      blockUndeliverable: bool(form, "blockUndeliverable"),
+    },
+  });
+  redirect("/admin/shipping?saved=1#shiprocket");
 }

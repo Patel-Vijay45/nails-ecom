@@ -63,11 +63,12 @@ Use an **aggregator** (Shiprocket, NimbusPost, iThink Logistics, Shipmozo and ot
 - **Product weight** field (default 150 g), ready for Phase 2.
 - Also built: parcel weight on each order, and a "real shipping cost" field on orders with an average-cost vs charged summary on Admin → Shipping.
 
-### Phase 2: when orders reach ~5+ per day (aggregator integration)
+### Phase 2: Shiprocket integration: ✅ built (setup guide: [07-shiprocket-setup.md](07-shiprocket-setup.md))
 - **At checkout:** serviceability check by pincode (can we deliver? is COD available?) and an estimated delivery date ("Get it by Thursday").
-- **In admin:** a **"Create shipment"** button on an order books the courier, gets the AWB number, downloads the label PDF and schedules pickup.
-- **Tracking webhook:** order status updates to Shipped / Delivered / RTO automatically and sends the WhatsApp update.
+- **In admin:** a **"Book shipment"** button on an order books the courier, gets the AWB number, makes the label PDF and schedules pickup.
+- **Tracking webhook:** order status updates to Shipped / Delivered / RTO automatically. (Sending the WhatsApp update is still one tap; automatic messages need the WhatsApp Business API.)
 - **Cost:** API access is free; you pay per shipment.
+- Also built: courier price comparison per order, cancel and re-book, "Try again" for a failed pickup/label, automatic *Delivered* → COD marked paid, RTO puts stock back, and a demo mode to try it without an account.
 
 ### Phase 3: optional
 - **Zone-based shipping table** (option B) editable in admin.
@@ -80,8 +81,8 @@ Use an **aggregator** (Shiprocket, NimbusPost, iThink Logistics, Shipmozo and ot
 |-------|-------|---------|
 | Product | `weightGrams` | Parcel weight for courier booking |
 | New table `PincodeRule` | `prefix`, `codAllowed`, `extraShipping`, `note` | Remote-area rules |
-| Order | `awb`, `courier`, `labelUrl`, `shippingCost` (real cost) | Booking + profit tracking (courier/tracking fields already exist) |
-| Store settings | aggregator API keys (in `.env`, not the database) | Phase 2 |
+| Order | `srOrderId`, `srShipmentId`, `labelUrl`, `manifestUrl`, `pickupDate`, `shipStatus`, `trackingEvents`, `expectedDelivery` (AWB goes in `trackingNumber`) | Booking + tracking |
+| Store settings | `pickupLocation`, `pickupPincode`, box size, `readyDays`, `customDays`, checkout options; API login in `.env`, not the database | Phase 2 |
 
 ## Sources
 

@@ -51,7 +51,10 @@ export default async function Orders({ searchParams }: { searchParams: Promise<{
                   <span className="text-xs font-semibold">{o.paymentMethod}</span>{" "}
                   <Badge value={o.paymentStatus} label={o.paymentStatus === "PENDING" ? (o.paymentMethod === "COD" ? "On delivery" : "Unpaid") : undefined} />
                 </td>
-                <td className="p-4"><Badge value={o.status} /></td>
+                <td className="p-4">
+                  <Badge value={o.status} />
+                  {o.shipStatus && !["DELIVERED", "RTO"].includes(o.status) && <p className="mt-1 text-[11px] text-muted">{o.shipStatus.toLowerCase()}</p>}
+                </td>
                 <td className="p-4 text-right font-semibold">{inr(o.total)}</td>
               </tr>
             ))}

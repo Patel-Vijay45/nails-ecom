@@ -10,7 +10,22 @@ import { useCart } from "../cart/CartProvider";
 import { PackageIcon, ShieldIcon } from "../Icons";
 import NailArt from "../NailArt";
 
-type Settings = { shippingFee: number; freeShippingAbove: number; codEnabled: boolean; codFee: number; onlineEnabled: boolean; storeName: string };
+type Settings = {
+  shippingFee: number;
+  freeShippingAbove: number;
+  codEnabled: boolean;
+  codFee: number;
+  onlineEnabled: boolean;
+  storeName: string;
+  showDeliveryDate: boolean;
+  blockUndeliverable: boolean;
+  readyDays: number;
+  customDays: number;
+};
+type Delivery = { deliverable: boolean; codAvailable: boolean | null; days: number | null } | null;
+
+/** "Tue, 10 Nov" for today + n days. */
+const dayLabel = (n: number) => new Date(Date.now() + n * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 
 type RazorpayOptions = Record<string, unknown> & { handler: (r: RazorpayResponse) => void };
 type RazorpayResponse = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
@@ -53,7 +68,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
 
   // Pincode lookup: fills city + state, suggests areas, and applies remote-area rules.
   type PinRule = { codAllowed: boolean; extraShipping: number; note: string } | null;
-  const [pin, setPin] = useState<{ status: "idle" | "loading" | "found" | "notfound" | "error"; city?: string; state?: string; areas: string[]; rule: PinRule }>({ status: "idle", areas: [], rule: null });
+  const [pin, setPin] = useState<{ status: "idle" | "loading" | "found" | "notfound" | "error"; city?: string; state?: string; areas: string[]; rule: PinRule; delivery?: Delivery }>({ status: "idle", areas: [], rule: null });
   const lastAuto = useRef({ city: "", state: "" });
   useEffect(() => {
     if (!/^\d{6}$/.test(c.pincode)) {
@@ -68,7 +83,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
         if (cancelled) return;
         if (!r.ok) return setPin({ status: "error", areas: [], rule: null });
         // Lookup service down: stay quiet (customer types the address), but still apply delivery rules.
-        setPin({ status: r.found ? "found" : r.unavailable ? "error" : "notfound", city: r.city, state: r.state, areas: r.areas ?? [], rule: r.rule ?? null });
+        setPin({ status: r.found ? "found" : r.unavailable ? "error" : "notfound", city: r.city, state: r.state, areas: r.areas ?? [], rule: r.rule ?? null, delivery: r.delivery ?? null });
         if (r.found) {
           // Fill city/state unless the customer typed their own (i.e. replace only empty or previously auto-filled values).
           const before = lastAuto.current;
@@ -85,7 +100,12 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
       cancelled = true;
     };
   }, [c.pincode]);
-  const codHere = settings.codEnabled && (pin.rule?.codAllowed ?? true);
+  const delivery = pin.status === "idle" || pin.status === "loading" ? null : pin.delivery ?? null;
+  const cantDeliver = settings.blockUndeliverable && delivery?.deliverable === false;
+  const codHere = settings.codEnabled && (pin.rule?.codAllowed ?? true) && !(settings.blockUndeliverable && delivery?.codAvailable === false);
+  // Delivery estimate: making / packing time + the courier's days in transit.
+  const makeDays = items.some((i) => i.size === "Custom") ? settings.customDays : settings.readyDays;
+  const arrives = settings.showDeliveryDate && delivery?.deliverable && delivery.days != null ? dayLabel(makeDays + delivery.days) : null;
   useEffect(() => {
     if (method === "COD" && !codHere && settings.onlineEnabled) setMethod("ONLINE");
   }, [codHere, method, settings.onlineEnabled]);
@@ -205,6 +225,16 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
               {pin.status === "found" && <span className="font-semibold text-[#2f6b44]">📍 {[pin.city, pin.state].filter(Boolean).join(", ")}</span>}
               {pin.status === "notfound" && <span className="text-berry">We couldn&apos;t find this pincode. Please check it.</span>}
             </div>
+            {arrives && (
+              <p className="text-sm font-semibold text-ink sm:col-span-2" data-testid="delivery-estimate">
+                🚚 Delivery by about {arrives}
+              </p>
+            )}
+            {cantDeliver && (
+              <p className="rounded-xl bg-blush px-4 py-3 text-sm font-semibold text-berry-dark sm:col-span-2">
+                Sorry, our couriers don&apos;t deliver to this pincode yet. Please check it, or message us on WhatsApp.
+              </p>
+            )}
             {pin.rule && (pin.rule.extraShipping > 0 || !pin.rule.codAllowed) && (
               <p className="rounded-xl bg-[#fdf0d5] px-4 py-3 text-sm text-[#8a5a00] sm:col-span-2">
                 {pin.rule.note ? `${pin.rule.note}: ` : "For this area: "}
@@ -314,7 +344,7 @@ export default function CheckoutForm({ settings }: { settings: Settings }) {
           </dl>
 
           {error && <p className="mt-4 rounded-xl bg-blush px-4 py-3 text-sm text-berry-dark">{error}</p>}
-          <button className="btn-primary mt-5 w-full py-4 text-base" disabled={busy || (!settings.onlineEnabled && !codHere)}>
+          <button className="btn-primary mt-5 w-full py-4 text-base" disabled={busy || cantDeliver || (!settings.onlineEnabled && !codHere)}>
             {busy ? "Placing order…" : method === "ONLINE" ? `Pay ${inr(total)}` : `Place order · ${inr(total)}`}
           </button>
           <p className="mt-3 flex items-center justify-center gap-2 text-xs text-muted">

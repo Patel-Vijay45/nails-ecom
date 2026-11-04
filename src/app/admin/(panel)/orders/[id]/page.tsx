@@ -10,8 +10,9 @@ import { KIT_SIZES, scanSchema, SEND_LATER, type Scan } from "@/lib/sizes";
 import { FINGERS } from "@/lib/constants";
 import { saveCustomerSizes, updateOrder } from "../../../actions";
 import { Badge, PageTitle, Saved } from "../../ui";
+import ShipmentPanel from "./ShipmentPanel";
 
-export default async function OrderDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; sizes?: string }> }) {
+export default async function OrderDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; sizes?: string; ship?: string; msg?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const [o, store] = await Promise.all([db.order.findUnique({ where: { id }, include: { items: { include: { product: true } } } }), getStore()]);
@@ -72,7 +73,10 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
             </dl>
           </section>
 
-          <form action={updateOrder} className="card grid gap-4 p-6 sm:grid-cols-2">
+          <ShipmentPanel o={o} store={store} flash={sp.ship ? { tone: sp.ship, msg: sp.msg ?? "" } : undefined} />
+
+          {/* key: redraw with fresh values after a booking or tracking update changed the order */}
+          <form key={o.updatedAt.getTime()} action={updateOrder} className="card grid gap-4 p-6 sm:grid-cols-2">
             <input type="hidden" name="id" value={o.id} />
             <h2 className="font-bold sm:col-span-2">Update order</h2>
             <label>

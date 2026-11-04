@@ -19,8 +19,9 @@ A complete, dynamic online store for selling handmade press-on nails, custom des
 | 2 | [Customer and order flows](docs/02-flows.md) | Customer journey, custom orders, fulfilment, returns |
 | 3 | [Website build plan](docs/03-website-build-plan.md) | Pages, features and phases |
 | 4 | [Test scenarios](docs/04-test-scenarios.md) | Checklist to test every part of the shop and admin |
-| 6 | [Shipping & address plan](docs/06-shipping-and-address-plan.md) | How to charge shipping, courier costs, free pincode autofill vs paid location lookup |
 | 5 | [Nail types](docs/05-nail-types.md) | Research: 11 shapes, 5 lengths, nail systems, 19 finishes, colour families |
+| 6 | [Shipping & address plan](docs/06-shipping-and-address-plan.md) | How to charge shipping, courier costs, free pincode autofill vs paid location lookup |
+| 7 | [Shiprocket setup](docs/07-shiprocket-setup.md) | Connect Shiprocket, book couriers and print labels from the admin panel, automatic tracking, demo mode |
 
 ---
 
@@ -63,11 +64,11 @@ flowchart LR
    - When a customer sends sizes on WhatsApp, the owner enters them once on the order page in the admin panel. That fills in the order and saves them for next time.
    - **No kit? Measure from a photo.** The customer photographs one hand flat on a table next to a **₹10 coin** (27 mm in every series), a **ruler / scale**, or a **bank / Aadhaar card** (85.6 mm). Fingers are found automatically and measuring dots are placed on each nail. The customer drags the dots to the nail edges with a magnifier (and lines up a gold circle with the coin), and the tool converts each width to a kit size using your tip widths (**Admin → Settings → Sizing kit tip widths**). If the customer agrees, the photo with the measuring lines is attached to the order so the artist can double-check it.
 4. **Bag.** A slide-out bag shows a free-shipping progress bar and suggests add-ons (glue, tabs, prep kit).
-5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). Typing the **pincode fills in city and state** and suggests area names (free India Post data). Remote-area rules can add extra shipping or turn off cash on delivery for some pincodes. The server recalculates every price from the database, so prices can't be tampered with.
+5. **Checkout.** Name, WhatsApp number, address and pincode, plus an optional coupon (e.g. `WELCOME10`). Typing the **pincode fills in city and state** and suggests area names (free India Post data). Remote-area rules can add extra shipping or turn off cash on delivery for some pincodes. With Shiprocket connected, checkout also shows **"Delivery by about …"** and refuses pincodes no courier serves. The server recalculates every price from the database, so prices can't be tampered with.
 6. **Pay.**
    - **UPI / card / netbanking** through Razorpay. The payment is verified on the server and the order is marked *Paid* and *Confirmed*.
    - **Cash on delivery** (adds the COD fee). The order waits as *Awaiting confirmation* and the customer gets a one-tap **"Confirm on WhatsApp"** button.
-7. **Track.** The confirmation page shows a status timeline (Confirmed → Being hand-painted → Packed → Shipped → Delivered) and the courier tracking link once it's added.
+7. **Track.** The confirmation page shows a status timeline (Confirmed → Being hand-painted → Packed → Shipped → Delivered), the courier tracking link, and (with Shiprocket) the latest courier scans, which update automatically.
 
 **Custom / bridal orders** go through `/custom`: occasion, event date, colours, budget and up to 5 inspiration photos. They appear in **Admin → Custom requests**, where the artist sets a quote and sends it on WhatsApp in one tap.
 
@@ -76,11 +77,11 @@ flowchart LR
 | Section | What you can do |
 |---------|-----------------|
 | **Dashboard** | Sales today and this month, average order value, orders to confirm and ship, best sellers, low stock |
-| **Orders** | Filter by status, search by name/phone/order no., change status, add courier + tracking, see parcel weight, record the real shipping cost, mark paid/refunded, one-tap WhatsApp messages (confirm COD, ask for sizes, shipped, ask for review) |
+| **Orders** | Filter by status, search by name/phone/order no., change status, **book a courier with Shiprocket** (compare prices, AWB, pickup, label, tracking, cancel) or add courier + tracking by hand, see parcel weight, record the real shipping cost, mark paid/refunded, one-tap WhatsApp messages (confirm COD, ask for sizes, shipped, ask for review) |
 | **Products** | Add/edit designs: price, sale price, packed weight, photos (any size from a phone; shrunk automatically, with previews, **Make main** and **Remove**), image links, colours + pattern for the generated art, shapes, lengths, made-to-measure fee, stock, badge, featured on home page, hide/show |
 | **Collections** | Create collections and set their colour and order |
 | **Custom requests** | See bridal/custom enquiries with photos, set a quote, send it on WhatsApp |
-| **Shipping** | Remote-area rules by pincode prefix (extra ₹, cash on delivery on/off, note shown to customer), a "test a pincode" box, and real courier cost vs shipping charged. Example rules for J&K, North-East, Sikkim, Andaman and Lakshadweep are added **switched off**: check the amounts and turn them on. |
+| **Shipping** | Remote-area rules by pincode prefix (extra ₹, cash on delivery on/off, note shown to customer), a "test a pincode" box (with courier prices once Shiprocket is connected), **Shiprocket settings** (pickup address, box size, packing days, webhook), and real courier cost vs shipping charged. Example rules for J&K, North-East, Sikkim, Andaman and Lakshadweep are added **switched off**: check the amounts and turn them on. |
 | **Coupons** | % or ₹ off, minimum order, usage limit, expiry date, pause/delete |
 | **Reviews** | Customer reviews wait here until you approve them |
 | **Settings** | Tip widths for each sizing-kit size (used by photo sizing), shop name, artist name, banner, home headline (wrap a word in `*stars*` to make it italic), about text, WhatsApp, Instagram, shipping fee, free-shipping threshold, COD on/off and fee, dispatch times |
@@ -123,6 +124,10 @@ Open http://localhost:3000 for the shop and http://localhost:3000/admin for the 
 2. Dashboard → **Settings → API Keys** → generate keys (start with **Test Mode**).
 3. Put them in `.env` as `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`, then restart. The "UPI, cards, netbanking" option appears at checkout automatically.
 
+### Turn on courier booking (Shiprocket)
+
+Sign up at shiprocket.in, create an **API user** (Settings → API), and put `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD` and `SHIPROCKET_WEBHOOK_TOKEN` in `.env`. Then choose your pickup address in **Admin → Shipping**. Step-by-step: [docs/07-shiprocket-setup.md](docs/07-shiprocket-setup.md). To try it without an account, set `SHIPROCKET_DEMO=1` (pretend couriers, nothing charged).
+
 ## Put it online
 
 **Easiest: a small VPS or Railway/Render with a persistent disk.** The site works as-is with SQLite and uploaded photos saved to disk.
@@ -163,7 +168,6 @@ docs/                    market research, business plan, flows, screenshots
 ## Not built yet (good next steps)
 
 - **Automatic WhatsApp / email messages** (WhatsApp Business API via Interakt/AiSensy, email via Resend). Today, admin sends WhatsApp messages with one tap.
-- **Shiprocket integration** for automatic labels and tracking. Today, you add courier + tracking by hand.
 - **Razorpay webhook** as a backup in case a customer closes the browser right after paying.
 - **Customer accounts** with saved nail sizes for one-click re-orders.
 - **Google Analytics / Meta Pixel** for ads.

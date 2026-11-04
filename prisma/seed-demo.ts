@@ -120,6 +120,18 @@ async function main() {
   for (const [n, cost] of [[1006, 62], [1007, 48], [1009, 124], [1012, 71]] as const) {
     await db.order.update({ where: { number: `TEST${n}` }, data: { shippingCost: cost } });
   }
+  // Courier tracking history (as Shiprocket's webhook would save it) on the shipped and delivered orders.
+  const stamp = (d: number, h: number) => ago(d, h).toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" });
+  const shippedScans = [
+    { date: stamp(1, 14), activity: "In Transit - Bag received at facility", location: "Delhi_Bamnoli_Hub (Delhi)" },
+    { date: stamp(2, 21), activity: "In Transit - Bag added to trip", location: "Ahmedabad_Changodar_GW (Gujarat)" },
+    { date: stamp(3, 18), activity: "In Transit - Shipment picked up", location: "Ahmedabad_Changodar_GW (Gujarat)" },
+  ];
+  await db.order.update({ where: { number: "TEST1006" }, data: { shipStatus: "IN TRANSIT", trackingEvents: JSON.stringify(shippedScans), expectedDelivery: stamp(-1, 18) } });
+  await db.order.update({
+    where: { number: "TEST1007" },
+    data: { shipStatus: "DELIVERED", trackingEvents: JSON.stringify([{ date: stamp(5, 13), activity: "Delivered", location: "Jaipur (Rajasthan)" }, { date: stamp(5, 9), activity: "Out for delivery", location: "Jaipur (Rajasthan)" }, ...shippedScans.map((e) => ({ ...e, date: stamp(7, 12) }))]) },
+  });
 
   // Saved nail sizes for one demo customer (loads with "Load my sizes" → 9000000004)
   await db.nailProfile.create({ data: { phone: "9000000004", right: "[3,6,5,6,8]", left: "[3,6,5,7,8]" } });

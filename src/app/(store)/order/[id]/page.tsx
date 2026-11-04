@@ -5,6 +5,7 @@ import { CheckIcon, WhatsAppIcon } from "@/components/Icons";
 import { STATUS_LABEL } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { formatDateTime, inr, waLink } from "@/lib/format";
+import { readEvents } from "@/lib/shipments";
 import { getStore } from "@/lib/store";
 
 export const metadata: Metadata = { title: "Your order", robots: { index: false } };
@@ -19,6 +20,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const needsSizes = order.items.some((i) => i.measurements.startsWith("Customer will send"));
   const stepIndex = STEPS.indexOf(order.status);
   const stopped = order.status === "CANCELLED" || order.status === "RTO";
+  const events = readEvents(order.trackingEvents);
   const waText =
     order.paymentMethod === "COD" && order.status === "PENDING"
       ? `Hi! I've placed order ${order.number} (${inr(order.total)}, cash on delivery). Please confirm it.`
@@ -80,8 +82,22 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 Track shipment
               </a>
             )}
+            {order.expectedDelivery && order.status === "SHIPPED" && <span className="block text-muted">Expected delivery: {order.expectedDelivery.slice(0, 10)}</span>}
           </p>
         ) : null}
+        {events.length > 0 && (
+          <ol className="mt-4 space-y-2 border-t border-line pt-4 text-sm" data-testid="customer-tracking">
+            {events.slice(0, 5).map((e, i) => (
+              <li key={`${e.date}-${i}`} className="flex gap-3">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${i === 0 ? "bg-berry" : "bg-line"}`} />
+                <span>
+                  <span className={i === 0 ? "font-semibold" : "text-muted"}>{e.activity}</span>
+                  <span className="block text-xs text-muted">{[e.location, e.date.slice(0, 16)].filter(Boolean).join(" · ")}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
         <p className="mt-4 text-xs text-muted">Placed {formatDateTime(order.createdAt)} · {store.dispatchDays}</p>
       </section>
 
